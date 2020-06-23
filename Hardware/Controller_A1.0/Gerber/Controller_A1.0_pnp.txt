@@ -1,0 +1,64 @@
+*Pick And Place List
+*Company=
+*Author=
+*eMail=
+*
+*Project=Controller_A1.0
+*Date=14:28:15
+*CreatedBy=Fritzing 0.9.3b.04.19.5c895d327c44a3114e5fcc9d8260daf0cbb52806
+*
+*
+*Coordinates in mm, always center of component
+*Origin 0/0=Lower left corner of PCB
+*Rotation in degree (0-360, math. pos.)
+*
+*No;Value;Package;X;Y;Rotation;Side;Name
+1;;;24.5367;-21.3433;0;Bottom;Arduino Nano
+2;;THT;46.1267;-31.9531;90;Bottom;9
+3;;THT;46.1267;-14.1731;90;Bottom;16
+4;;;29.9348;-50.6882;0;Bottom;Hole11
+5;;mini-din6;13.6233;-49.0908;0;Bottom;PS/2 port B3
+6;1k;THT;36.4507;-38.4764;35;Bottom;R2
+7;;THT;46.1267;-16.7131;90;Bottom;15
+8;;;19.6165;-50.6521;0;Bottom;Hole14
+9;;;1.25932;-9.20876;0;Bottom;TXT1
+10;;mini-din6;35.8708;-49.116;0;Bottom;PS/2 port B2
+11;;THT;2.9467;-24.3331;-90;Bottom;5
+12;;THT;46.1267;-21.7931;90;Bottom;13
+13;100µF;100 mil [THT, electrolytic];40.3451;-40.1566;145;Bottom;C2
+14;;;46.1942;-35.2096;-90;Bottom;TXT3
+15;1k;THT;12.9837;-38.492;145;Bottom;R1
+16;;;3.01272;-34.6076;-90;Bottom;TXT3
+17;;power_jack_pth_lock;9.99314;-5.50694;0;Bottom;J1
+18;;;46.1942;-11.7047;-90;Bottom;TXT3
+19;100k;THT;21.9967;-31.9531;-90;Bottom;R3
+20;;;3.5263;-47.5781;0;Bottom;Hole19
+21;;;29.5768;-18.1428;90;Bottom;TXT4
+22;;THT;2.9467;-31.9531;-90;Bottom;8
+23;;;46.9841;-10.1268;90;Bottom;TXT1
+24;100µF;100 mil [THT, electrolytic];9.36244;-40.258;-145;Bottom;C1
+25;;;24.4466;-50.2101;0;Bottom;TXT2
+26;;THT;46.1267;-29.4131;90;Bottom;10
+27;;THT;2.9467;-19.2531;-90;Bottom;3
+28;;;46.772;-3.59104;0;Bottom;Hole1
+29;;;3.1229;-11.7742;-90;Bottom;TXT3
+30;;;3.40408;-9.54376;90;Bottom;TXT1
+31;;;7.68729;-50.7822;0;Bottom;Hole15
+32;;THT;38.5067;-22.8023;0;Bottom;ULN2803A
+33;100k;THT;24.5367;-31.9531;-90;Bottom;R4
+34;;;45.8725;-47.5717;0;Bottom;Hole20
+35;;;13.6365;-50.6246;0;Bottom;Hole16
+36;;THT;2.9467;-29.4131;-90;Bottom;7
+37;;;28.1237;-17.3518;90;Bottom;TXT4
+38;;THT;2.9467;-16.7131;-90;Bottom;2
+39;;THT;2.9467;-21.7931;-90;Bottom;4
+40;;THT;46.1267;-19.2531;90;Bottom;14
+41;;;35.8841;-50.6421;0;Bottom;Hole13
+42;;THT;46.1267;-26.8731;90;Bottom;11
+43;;THT;46.1267;-24.3331;90;Bottom;12
+44;;;41.8301;-50.5361;0;Bottom;Hole12
+45;;THT;2.9467;-14.1731;-90;Bottom;1
+46;;THT;2.9467;-26.8731;-90;Bottom;6
+47;;;44.2214;-9.86211;90;Bottom;TXT1
+48;;;2.31725;-3.70732;0;Bottom;Hole17
+49;;THT;10.5667;-22.8381;180;Bottom;ULN2803A 

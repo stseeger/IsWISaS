@@ -1,0 +1,51 @@
+#logDescriptor to parse the logfiles of a Picarro L1102-i, L2120-i or L2130-i
+
+######################################################################################
+#part1: define how to find the log files and how to interpret the time for each record
+# seperator can either be a char to sperate columns, empty (for white sace) or a numeric value (for fixed spacing)
+
+L1102-i| logFilePattern   : %Y%m%d/H(G|B|I)DS\d{2,4}-%Y%m%d-%H%M-Data.dat
+L1102-i| timeColumns      : DATE; TIME
+L1102-i| timeFormatString : %m/%d/%y %H:%M:%S.%f
+L1102-i| skipLines        : 0
+L1102-i| commentChar      : #
+L1102-i| seperator        : 26
+L1102-i| encoding         : utf-8
+
+L2120-i| logFilePattern   : %Y/%m/%d/H(G|B|I)DS\d{2,4}-%Y%m%d-%H%M%SZ-DataLog_User.dat
+L2120-i| timeColumns      : DATE; TIME
+L2120-i| timeFormatString : %Y-%m-%d %H:%M:%S.%f
+L2120-i| skipLines        : 0
+L2120-i| commentChar      : #
+L2120-i| seperator        : 26
+L2120-i| encoding         : utf-8
+
+L2130-i| logFilePattern   : %Y/%m/%d/H(G|B|I)DS\d{2,4}-%Y%m%d-%H%M%SZ-DataLog_User.dat
+L2130-i| timeColumns      : DATE; TIME
+L2130-i| timeFormatString : %Y-%m-%d %H:%M:%S.%f
+L2130-i| skipLines        : 0
+L2130-i| commentChar      : #
+L2130-i| seperator        : 26
+L2130-i| encoding         : utf-8
+
+########################################################################################
+#part2: define where (under which column name) to find the parameters of interest
+# the first line determines how they will be loaded into the the script
+# the second line defines the unit of the parameter
+# the follwoing lines should provide the corresponding column names in the respective log files
+
+# essentialColumns are a must
+|essentialColumns: DATE; TIME;  H2O; delta18O   ; deltaD
+|units           :   - ;   - ; ppmV;    ‰       ;   ‰ 
+|L1102-i         : DATE; TIME;  H2O; D_1816     ; D_DH
+|L2120-i         : DATE; TIME;  H2O; Delta_18_16; Delta_D_H
+|L2130-i         : DATE; TIME;  H2O; Delta_18_16; Delta_D_H
+-
+
+# optionalColumns could be missing
+|optionalColumns: CH4            ;              meOH; yEffA
+|units          :        ?       ;        ?         ;      ?
+|L1102-i        : ORGANIC_CH4CONC; ORGANIC_MEOH_AMPL;   H2O_Y_EFF
+|L2120-i        : organic_ch4conc;  organic_MeOHampl; h2o_y_eff_a 
+|L2130-i        : CH4            ;        ?         ;      ?
+-
