@@ -4,4 +4,4 @@ Each of the different controller types should respond to the same set of serial 
 **valve**: return the active valve  
 **valve #**: activate valve # and close previous active valve  
 **flow**: return the analog voltages (in mV) returned by the two mass flow controllers (seperated by spaces)  
-**flow a b**: change the set point voltages (a and b in mV) to the two flow controllers (A and B)  
+**flow a b**: change the set point voltages of the two flow controllers (A and B) to a and b (in mV)
