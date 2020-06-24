@@ -167,7 +167,12 @@ class ValveControlFrame(tk.Frame):
         self.sequencePaused = False
 
         # open first valve of valveSequence
+        #time.sleep(1)
         self.sequenceButton_click(0)
+        self.sequencePosition = -1
+        time.sleep(0.2)
+        self.sequenceButton_click(0)
+        #self.sequenceButton_click(0,False)
 
     #================================================================================
 
@@ -336,7 +341,7 @@ class ValveControlFrame(tk.Frame):
         else:
             print("------------------\nactive probe: "+str(self.valveList[self.valveToIndexDict[valveName]]))
             self.toggle_flowMode("flush")
-            self.vc.open(int(self.valveToSlotDict[valveName]))
+            self.vc.set_valve(int(self.valveToSlotDict[valveName]))
             self.set_currentProbeProfile(name=valveName)
             self.valveBuffer.add(valveName)
             
@@ -349,8 +354,8 @@ class ValveControlFrame(tk.Frame):
 if __name__ == "__main__":
     import SerialDevices
     deviceDict, portDict = SerialDevices.scan_serialPorts(9600)
-    if "FlowController" in deviceDict.keys():        
-        vc = SerialDevices.ValveController(deviceDict["ValveController"].port, deviceDict["ValveController"].baudRate)
+    if "IsWISaS_Controller" in deviceDict.keys():        
+        vc = SerialDevices.IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port, deviceDict["IsWISaS_Controller"].baudRate)
     else:
         vc = SerialDevices.ValveController("foobar", 0)
 

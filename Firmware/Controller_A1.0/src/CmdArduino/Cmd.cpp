@@ -30,7 +30,7 @@
     Originally written by Christopher Wang aka Akiba.
     Please post support questions to the FreakLabs forum.
 	
-	Small modifications made by Stefan Seeger
+	++ small modifications made by Stefan Seeger (marked with //st)
 
 *******************************************************************/
 /*!
@@ -57,10 +57,13 @@ static uint8_t *msg_ptr;
 static cmd_t *cmd_tbl_list, *cmd_tbl;
 
 // text strings for command prompt (stored in flash)
-//const char cmd_banner[] PROGMEM = "*************** CMD *******************"; // StS: commented out
-//const char cmd_prompt[] PROGMEM = "CMD >> "; // StS: original line discarded
-const char cmd_prompt[] PROGMEM = ">> ";       // StS: slightly modified line
-const char cmd_unrecog[] PROGMEM = "CMD: Command not recognized.";
+//const char cmd_banner[] PROGMEM = "*************** CMD *******************"; //st: initial banner unneccessary
+
+//const char cmd_prompt[] PROGMEM = "CMD >> "; //st: original prompt
+const char cmd_prompt[] PROGMEM = ">> ";       //st: shortened prompt
+
+//const char cmd_unrecog[] PROGMEM = "CMD: Command not recognized."; //st: original error
+const char cmd_unrecog[] PROGMEM = "!unkown command!";               //st: modified error
 
 /**************************************************************************/
 /*!
@@ -71,14 +74,13 @@ void cmd_display()
 {
     char buf[50];
 
-    Serial.println();
-    //strcpy_P(buf, cmd_banner);  // StS: commented out
-    //Serial.println(buf);        // StS: commented out
- 
+    //Serial.println(); //st: unneccessary
+
+    //strcpy_P(buf, cmd_banner);//st : initial banner unneccessary
+    //Serial.println(buf);      //st
+
     strcpy_P(buf, cmd_prompt);
     Serial.print(buf);
-	
-	return;
 }
 
 /**************************************************************************/
@@ -115,8 +117,6 @@ void cmd_parse(char *cmd)
         if (!strcmp(argv[0], cmd_entry->cmd))
         {
             cmd_entry->func(argc, argv);
-			Serial.print("<<## ");         //Sts: line added
-			Serial.println(argv[0]);     //Sts: line added
             cmd_display();
             return;
         }
@@ -124,7 +124,7 @@ void cmd_parse(char *cmd)
 
     // command not recognized. print message and re-generate prompt.
     strcpy_P(buf, cmd_unrecog);
-	Serial.println(buf);
+    Serial.println(buf);
 
     cmd_display();
 }
@@ -146,7 +146,7 @@ void cmd_handler()
         // terminate the msg and reset the msg ptr. then send
         // it to the handler for processing.
         *msg_ptr = '\0';
-        Serial.print("\r\n");
+        Serial.print("\r\n"); //st
         cmd_parse((char *)msg);
         msg_ptr = msg;
         break;

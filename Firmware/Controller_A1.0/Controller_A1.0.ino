@@ -1,23 +1,31 @@
-//#include "TimerOne.h"
-#include <Cmd.h>
+//#include "src/TimerOne/TimerOne.h"
+#include "src/CmdArduino/Cmd.h"
+
+
+#define DEVICE "IsWISaS_Controller"
+#define MODEL "A"
+#define VERSION "1.0"
 
 // PWM pins for the RC-circuits
 #define PWM_A 5
 #define PWM_B 6
 
 // analog pins for reading the flow controllers' feedback
-#define ANA_A A0
-#define ANA_B A1
+#define ANA_A A5
+#define ANA_B A6
 
 
 // pins to control the valves
 #define VALVE_COUNT 16
-const byte valvePins[16] = { 9,  8,  7,  10,  11,  4,  3,  2,
-                            A2, A3, A4,  A5,  A6, A7, 12, 13};
+const int valvePins[16] = { 9,  8,  7,  10,  11,  4,  3,  2,
+                            A0, A1, A2,  A3,  A4, A5, 12, 13};
+
+byte activeValve = 1;
 
 // varaibles to save target flow values and actual flow rates
 float recentA = 0;
 float recentB = 0;
+
 float targetA = 0;
 float targetB = 0;
                                                         
@@ -25,15 +33,21 @@ float targetB = 0;
 
 //=== serial communication ===========
 
-//>> ? -> return device type
 void cmd_identify(int arg_cnt, char **args){
-  Serial.print("deviceType:");
-  arg_cnt==1 ? Serial.print(' ') : Serial.println();
-  Serial.println("Controller_A1.0");
+  Serial.print(DEVICE);
+  Serial.print(" ");
+  Serial.print(MODEL);
+  Serial.print(" ");
+  Serial.println(VERSION);  
 }
 
-//>> set -> set flow target values
-void cmd_set(int arg_cnt, char **args){
+void cmd_flow(int arg_cnt, char **args){
+
+  if(arg_cnt == 1){
+    measure_flows();
+     Serial.print(recentA);Serial.print(' ');Serial.println(recentB);
+     return;
+  }
 
   // in case two numbers were passed, set target A and B accordingly
   if (args[1][0] != 'A' & args[1][0] != 'B'){
@@ -54,17 +68,19 @@ void cmd_set(int arg_cnt, char **args){
   set_flows();
 }
 
-//>> get -> return the most recent measured flow values
-void cmd_get(int arg_cnt, char **args){
-  Serial.print(recentA);Serial.print(' ');Serial.println(recentB);
-}
-
-//>> open -> open the specified valve and close the rest
-void cmd_open(int arg_cnt, char **args){
+void cmd_valve(int arg_cnt, char **args){
+      
+  if(arg_cnt>2){
+    Serial.println(activeValve);
+    return;    
+  }
+  
   int v = cmdStr2Num(args[arg_cnt-1], 10);
   if(v < 1 | v > VALVE_COUNT) return;
+  
+  activeValve = v;
   for(byte i=0; i < VALVE_COUNT; i++){
-    digitalWrite(valvePins[i], i==(v-1));    
+    digitalWrite(valvePins[i], i==(v-1));   
   }  
 }
 
@@ -72,6 +88,9 @@ void cmd_open(int arg_cnt, char **args){
 void set_flows(){
   analogWrite(PWM_A, map(targetA, 0, 5000, 0, 255));
   analogWrite(PWM_B, map(targetB, 0, 5000, 0, 255));
+
+  //Timer1.pwm(PWM_A, map(targetA, 0, 5000, 0, 1023));
+  //Timer1.pwm(PWM_B, map(targetB, 0, 5000, 0, 1023));
 }
 
 void measure_flows(){
@@ -89,21 +108,21 @@ void measure_flows(){
 
 void setup()
 { 
-  // Timer1.initialize(1024);
+  //Timer1.initialize(100); // 100 µs -> 10 kHz
   cmdInit(9600);
-  cmdAdd("?", cmd_identify);
-  cmdAdd("get", cmd_get);
-  cmdAdd("set", cmd_set);
-  cmdAdd("open", cmd_open);
+  cmdAdd("?", cmd_identify);  
+  //cmdAdd("flow", cmd_flow);
+  cmdAdd("valve", cmd_valve);
   for(byte i=0; i < VALVE_COUNT; i++){
     pinMode(valvePins[i], OUTPUT);    
-  }
+    digitalWrite(valvePins[i], i == (activeValve-1));
+  }  
   cmd_identify(0,NULL);
-  set_flows();
-  digitalWrite(valvePins[0],HIGH);
+  for(byte i=0; i<30; i++)Serial.print('=');
+  Serial.print("\n>> ");
+  set_flows();    
 }
 
-void loop() {
-  measure_flows();
+void loop() { 
   cmdPoll();
 }

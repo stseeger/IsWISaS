@@ -49,10 +49,10 @@ def scan_serialPorts(baudRate = [1200,9600]):
         for bR in baudRate:
             d = SerialDevice(port, bR)
             d.serial.close()
-            info = DeviceInfo(port, bR, d.deviceName)            
+            info = DeviceInfo(port, bR, d.deviceType)            
             if not info.name == 'SerialDevice':
                 portDict[port] = info
-                deviceDict[d.deviceName] = info
+                deviceDict[d.deviceType] = info
     return deviceDict, portDict
     
 
@@ -62,10 +62,12 @@ class SerialDevice:
     CONNECTED = 1
     RESPONSIVE = 2
     
-    def __init__(self, port, baudrate, deviceName="SerialDevice"):
+    def __init__(self, port, baudrate, deviceType="SerialDevice"):
 
-        self.deviceName = deviceName        
-        print(5*"="+deviceName+(30-len(deviceName))*"=")
+        self.deviceType = deviceType
+        self.deviceModel = "?"
+        self.deviveFirmwareVersion = "?"
+        print(5*"="+deviceType+(30-len(deviceType))*"=")
 
         # open serial port
         try:
@@ -75,20 +77,24 @@ class SerialDevice:
             self.serial.open()
             self.status = SerialDevice.CONNECTED
             sys.stdout.write("   %s (%d bauds) "%(port,baudrate))
-            if(deviceName=="SerialDevice"):
-
+            if(deviceType=="SerialDevice"):
+               
                 for attempt in range(3):                                                        
                     deviceMessage = self.identify()
                     if len(deviceMessage) > 2:
                         break
+                    time.sleep(0.1)
                 
-                if len(deviceMessage) >= 3 and deviceMessage[0] == "deviceType:":                    
-                        self.deviceName = deviceMessage[1]
+                if len(deviceMessage) >= 3 and deviceMessage[0] == "?":                        
+                        deviceInfo = deviceMessage[1].split(' ')                        
+                        self.deviceType = deviceInfo[0]
+                        self.deviceModel = deviceInfo[1]
+                        self.deviveFirmwareVersion = deviceInfo[2]
 
-                if self.deviceName == "SerialDevice":
+                if self.deviceType == "SerialDevice":
                     print("identification failed :(")
                 else:
-                    print("device identified :) \n  " + self.deviceName)
+                    print("device identified :) \n  " + self.deviceType)
                     
         except:
             self.status = SerialDevice.NOT_CONNECTED
@@ -125,36 +131,95 @@ class SerialDevice:
     
         if not requestResult is None and len(requestResult):
             self.status = SerialDevice.RESPONSIVE
-            if verbose: print("%s should be ready to use"%self.deviceName)
+            if verbose: print("%s should be ready to use"%self.deviceType)
         else:
             self.status = SerialDevice.CONNECTED
-            if verbose: print("%s  will probably not work"%self.deviceName)
+            if verbose: print("%s  will probably not work"%self.deviceType)
 
         return(self.status)
 #----------------------------------
 
-class ValveController(SerialDevice):
-    def __init__(self, port, baudrate):
+class IsWISaS_Controller(SerialDevice):
 
-        # open serial port via initialization method of super class
-        super(ValveController, self).__init__(port, baudrate, "ValveController")
+    def __init__(self, port, baudrate, flowCalibration = None):
+        super(IsWISaS_Controller, self).__init__(port, baudrate, "IsWISaS_Controller")
 
-        if self.status == SerialDevice.CONNECTED:
-            self.check_status(verbose=True)
+        self.set_flowCalibration(flowCalibration)
 
-    def open(self,valve):
+        self.flowTargetA = 0
+        self.flowTargetB = 0
 
-        print("ValveController -> open %d"%valve)
-        if self.status == SerialDevice.NOT_CONNECTED: return []  
-        self.serial.write(("open %d\r"%(valve)).encode("utf-8"))
+    def get_something(self, cmd, attempts=3, waitTime=500):
+
+        for attempt in range(attempts):
+            self.serial.write(("%s\r"%(cmd)).encode("utf-8"))
+            response = self.readComPort(500)
+            if len(response) > 2 and response[-1] == ">> " and response[-3].endswith(cmd):
+                return response[-2]
+
+        return None
+
+    # ------- valve section -----------------
+    def set_valve(self,valve):
+        print("%s >> valve %d"%(self.deviceType,valve))
+        self.serial.write(("valve %d\r"%(valve)).encode("utf-8"))
+
+    def get_valve(self):
+        response = self.get_something("valve")
+
+        try:
+            return int(response)
+        except:
+            return response        
+
+    # ------- flow section -------------------
+
+    def set_flowCalibration(self, calibration=None):
+        if calibration is None:
+            self.flowCalibration = {"A":{"set_slope":1.0,
+                                         "set_intercept":0.0,
+                                         "get_slope":1.0,
+                                         "get_intercept":0.0},
+                                    "B":{"set_slope":1.0,
+                                         "set_intercept":0.0,
+                                         "get_slope":1.0,
+                                         "get_intercept":0.0}}
+        else:
+            self.calibration = calibration
+
+        fc = self.flowCalibration
+        self.maxFlowA = 5000 * fc["A"]["set_slope"] + fc["A"]["set_intercept"]
+        self.maxFlowB = 5000 * fc["B"]["set_slope"] + fc["B"]["set_intercept"]
 
 
-    def get_valveStates(self):
-
-        if self.status == SerialDevice.NOT_CONNECTED: return []
+    def get_flow(self):
+        response = self.get_something("flow")
         
-        self.serial.write(b"whoisopen \r")
-        return self.readComPort(500)
+        try:
+            result = [float(x) for x in response.split(" ")]
+            fc = self.flowCalibration
+            flowA = result[0] * fc["A"]["get_slope"] + fc["A"]["get_intercept"]
+            flowB = result[1] * fc["B"]["get_slope"] + fc["B"]["get_intercept"]
+            return [flowA, flowB]
+        except:
+            return response
+
+    def set_flow(self, flowA, flowB = 0):
+        print("%s >> flow %d %d"%(self.deviceType, flowA, flowB))
+
+        if self.status == SerialDevice.NOT_CONNECTED:
+            print("!! no serial connection to device !!")
+            return
+        
+        fc = self.flowCalibration
+        flowA = int(flowA * fc["A"]["set_slope"] + fc["B"]["set_intercept"])
+        flowB = int(flowB * fc["B"]["set_slope"] + fc["B"]["set_intercept"])
+
+        self.flowTargetA = flowA
+        self.flowTargetB = flowB
+
+        cmd = "flow %d %d"%(flowA, flowB)        
+        self.serial.write(cmd.encode("utf-8"))
 
 #------------------------------------------
 
@@ -249,6 +314,9 @@ if __name__ == "__main__":
    
     print("Available serial ports:", detect_serialPorts()) 
     deviceDict, portDict = scan_serialPorts([9600])
+
+    c = IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port,
+                           deviceDict["IsWISaS_Controller"].baudRate)
 
     #vc = ValveController(deviceDict["ValveController"].port, deviceDict["ValveController"].baudRate)
     #time.sleep(1)
