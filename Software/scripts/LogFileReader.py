@@ -16,6 +16,13 @@ class LogFileEntry():
     def __repr__(self):
         return support.secs2String(self.time,"%Y-%m-%d %H:%M:%S") + str(self.data)
 
+class ExtendedFileHandle():
+    def __init__(self, handle, path, columnOfParameter, columnsOfTimeAndData):
+        self.handle = handle
+        self.path = path
+        self.columnOfParameter = columnOfParameter
+        self.columnsOfTimeAndData = columnsOfTimeAndData
+
 class Reader():
     def __init__(self, configFile, logDir, logScheme = '?'):
         self.logDir = logDir
@@ -34,26 +41,9 @@ class Reader():
                 self.columns[key] = conf[qualifier+"Columns"][logScheme][key]
                 self.units[key] = conf[qualifier+"Columns"]["units"][key]
 
-        self.current_logFile = None
-        
-
-    def raw_open_logFile(self, logFile, skipLines = 0, encoding="utf-8"):
-        """
-        Open a (possibly gzipped) logFile and return the file handler.
-
-        Keyword arguments:
-        logFile -- filepath of the logFile to open
-        skipLines -- number of lines to skip (defaults to 0)
-        enoding -- encoding of the log file (defaults to utf-8)
-        """        
-        filepath = self.logDir+'/'+logFile
-        if logFile.endswith("gz"):            
-            f = gzip.open(filepath,'rt',encoding=encoding)
-        else:           
-            f = open(filepath,'r', encoding=encoding)
-        for i in range(int(skipLines)):
-            l=f.readline()            
-        return f
+        self.current = None
+        self.dataBuffer = None
+        self.lastTime = 0
 
     def list_logFiles(self, pattern = None, logDir = None):
         """
@@ -72,7 +62,25 @@ class Reader():
         return sorted(matchingFiles)
 
     def get_mostRecentLogFile(self):
-        return self.list_logFiles()[-1]                       
+        return self.list_logFiles()[-1]
+
+    def raw_open_logFile(self, logFile, skipLines = 0, encoding="utf-8"):
+        """
+        Open a (possibly gzipped) logFile and return the file handler.
+
+        Keyword arguments:
+        logFile -- filepath of the logFile to open
+        skipLines -- number of lines to skip (defaults to 0)
+        enoding -- encoding of the log file (defaults to utf-8)
+        """        
+        filepath = self.logDir+'/'+logFile
+        if logFile.endswith("gz"):            
+            f = gzip.open(filepath,'rt',encoding=encoding)
+        else:           
+            f = open(filepath,'r', encoding=encoding)
+        for i in range(int(skipLines)):
+            l=f.readline()            
+        return f
 
     def get_logFileHeader(self, logFile, logFileSpecs = None):
         """
@@ -129,9 +137,8 @@ class Reader():
         
     def detect_logScheme(self, conf):
         """
-        Returns a the name of the detected scheme of logfiles found in self.logDir.
+        Returns the name of the detected scheme of logfiles found in self.logDir.
         """
-
         fileLists = {}
         fileCounts = {}        
         
@@ -197,9 +204,10 @@ class Reader():
 
         f = self.raw_open_logFile(logFile, n)
 
-        self.current_colPos = pos
-        self.current_colInd = colIndices
-        self.current_logFile = logFile
+        self.current = ExtendedFileHandle(handle = f,
+                                          path = logFile,
+                                          columnOfParameter = pos,
+                                          columnsOfTimeAndData= colIndices)        
 
         return f
 
@@ -207,7 +215,7 @@ class Reader():
         """
         Parses a raw logfile line into a LogFileEntry object (containing timestamp and data entries).
         """
-        colIndices = self.current_colInd
+        colIndices = self.current.columnsOfTimeAndData
         line = support.split(rawLine, self.conf["seperator"])        
         # get components of time info, combine them and convert to unix timestamp
         t = [line[x] for x in colIndices["time"]]
@@ -233,7 +241,9 @@ class Reader():
         return LogFileEntry(t, data)
 
     def scan_logFileTime(self, filepath, onlyFirst = True):
-
+        """
+        Returns the first (and optionaly last) time within a log file
+        """
         f=self.open_logFile(filepath)
         posA = f.tell()
 
@@ -243,7 +253,7 @@ class Reader():
             firstTime = None
 
         if onlyFirst:
-            return firstTime
+            return firstTime        
             
         posB = f.tell()
         f.seek(0,2) # go to end of file
@@ -264,6 +274,9 @@ class Reader():
         return firstTime, lastTime
 
     def filter_logFiles(self, newerThan, olderThan=None):
+        """
+        Returns all log files that are newer (and optionally older) than a specified time
+        """
         fileList = self.list_logFiles()
 
         if isinstance(newerThan, str):
@@ -282,18 +295,29 @@ class Reader():
 
         return filteredFileList
             
-    def read_complete_logFile(self, filepath, dataBuffer):        
+    def read_logFile(self, filepath, dataBuffer):
+        """
+        Reads a complete (all lines are expected to be complete) log file into a dataBuffer
+        """
         f = self.open_logFile(filepath)
         for rawLine in f.readlines():
             entry = self.parse_logFileLine(rawLine)
             dataBuffer.add(entry.data, entry.time)
         return dataBuffer
 
-    def read_unfinished_logFile(self, filepath, dataBuffer):
+    def update(self, dataBuffer=None, proceed=True):
+        """
+        Read data from the currently opened log file to a dataBuffer
 
-        # to do: work with opened most recent log file
+        Keyword arguments:
+        dataBuffer -- dataBuffer object to read to (if None, then self.dataBuffer is used)
+        proceed -- boolean value to indicate, whether a more recent logfile should be opened
+        """
+
+        f = self.current.handle
+        if dataBuffer is None:
+            dataBuffer = self.dataBuffer
         
-        f = self.open_logFile(filepath)
         fine = True
         while fine:
             lastPos = f.tell()
@@ -305,10 +329,19 @@ class Reader():
                 fine = False
                 f.seek(lastPos)
 
+        if proceed:
+            latestLogFile = self.list_logFiles[-1]
+            if  not self.current.path == latestLogFile:
+                self.open_logFile(latestLogFile)
+                self.update(dataBuffer)
+
         return dataBuffer
-        
+
 
     def create_dataBuffer(self, bufferSize = 1000):
+        """
+        Creates a data dataBuffer object that can hold the data of the log file
+        """
         reverseColumnDict = support.reverse_dict(self.columns)
         parList = []
         for column in self.columns.keys():
@@ -319,20 +352,23 @@ class Reader():
         return DataBuffer.Buffer(bufferSize, None, parList)
 
     def fill_dataBuffer(self, dataBuffer=None, firstTime=None, lastTime=None):
-
+        """
+        Returns a dataBuffer filled with log file data
+        """
         if dataBuffer is None:
             dataBuffer = self.create_dataBuffer()
 
         logFileList = self.filter_logFiles(firstTime, lastTime)
 
         for filepath in logFileList[:-1]:
-            self.read_complete_logFile(filepath, dataBuffer)
+            self.read_logFile(filepath, dataBuffer)
 
-        self.read_unfinished_logFile(filepath, dataBuffer)
+        self.open_logFile(logFileList[-1])
+        self.update(dataBuffer, proceed=False)
 
         return dataBuffer
-            
 
+            
 if __name__ == "__main__":
 
     configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
@@ -340,19 +376,5 @@ if __name__ == "__main__":
     logDir = "../exampleLogs/2120"
     
     s = Reader(configFile, logDir, "?")
-    #print(s.scan_logFileTimeRange(s.list_logFiles()[0]))
 
-    #s.read_logFile(s.list_logFiles()[-1])
-
-    #x=s.filter_logFiles("2017-09-05 00:00:00", "2017-09-06 00:00:00")
-
-    x=s.fill_dataBuffer()
-
-    #print(s.scan_logFile(s.list_logFiles()[-1]))
-
-    #logfile = s.get_mostRecentLogFile()
-
-    #startTime = time.time()
-    #for i in range(100):
-    #    s.scan_logFileTime(logfile)
-    #print(time.time()-startTime)
+    b=s.fill_dataBuffer()
