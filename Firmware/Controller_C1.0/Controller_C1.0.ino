@@ -3,7 +3,7 @@
 
 
 #define DEVICE "IsWISaS_Controller"
-#define MODEL "A"
+#define MODEL "C"
 #define VERSION "1.0"
 
 // PWM pins for the RC-circuits
@@ -16,9 +16,9 @@
 
 
 // pins to control the valves
-#define VALVE_COUNT 16
-const int valvePins[16] = { 9,  8,  7,  10,  11,  4,  3,  2,
-                            A0, A1, A2,  A3,  A4, A5, 12, 13};
+#define VALVE_COUNT 14
+const int valvePins[14] = { 9,  8,  7,  10,  11,  4,  3,  2,
+                            A4, A3, A2,  A1,  A0, 12};
 
 byte activeValve = 1;
 

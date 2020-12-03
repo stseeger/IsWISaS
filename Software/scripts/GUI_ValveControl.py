@@ -250,8 +250,10 @@ class ValveControlFrame(tk.Frame):
             self.update_valveButtons()
             self.startTime = time.time()
 
-        if self.measuredEnough():    
-            for nextPos in list(range(self.sequencePosition+1, len(self.valveSequence))) + list(range(0, self.sequencePosition)) + [self.sequencePosition]:                
+        if self.measuredEnough():
+            remainingPart = list(range(self.sequencePosition+1, len(self.valveSequence)))
+            passedPart = list(range(0, self.sequencePosition)) + [self.sequencePosition]            
+            for nextPos in (remainingPart + passedPart):
                 if self.valveSequence[nextPos].stateVar.get():
                     break
                 else:
@@ -265,7 +267,7 @@ class ValveControlFrame(tk.Frame):
 
     def sequenceButton_click(self, sequencePos, withinSequence=False):
         noChange = self.sequencePosition==sequencePos
-        self.sequencePosition = sequencePos
+        self.sequencePosition = sequencePos        
 
         # activate the corresponding valve button to an active button in the valve sequence
         for i, valve in enumerate(self.valveList):
