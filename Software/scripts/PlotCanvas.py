@@ -1,5 +1,6 @@
 import tkinter as tk
 import time
+import colorsys
 
 #---- possible tick spacings ----
 possibleTickSpacings = []
@@ -9,7 +10,6 @@ for y in range(-4,7):
 
 
 possibleTimeSpacings = [1, 10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 21600, 86400, 172800, 432000, 2592000, 15552000]
-
 
 class PlotCanvas(tk.Canvas):
     def __init__(self,master, plotRangeX, plotRangeY, marginX=62, marginY=20, axes=True, selectionHandler = None, *args,**kwargs):
@@ -54,7 +54,6 @@ class PlotCanvas(tk.Canvas):
             
         return self.buttonSpecs[button==1]
         
-
     def on_click_release(self, event):
         specs = self.get_buttonSpecs(event)
         
@@ -75,7 +74,6 @@ class PlotCanvas(tk.Canvas):
         self.selection[specs["button"]][1] = self.get_time(event)
         self.delete("dragEnd_%s"%specs["button"])
         self.vertLines([self.selection[specs["button"]][1]], tag="dragEnd_%s"%specs["button"], width=3, color=specs["color"])
-        
 
     def get_time(self, event):
         relTime = (event.x - self.marginX) / (self.pxWidth - self.marginX)

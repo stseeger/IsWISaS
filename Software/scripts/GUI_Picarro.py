@@ -948,8 +948,7 @@ class PicarroFrame(tk.Frame):
             plot.draw_xAxis([t[plotStart],t[plotEnd]],optimalTicks = 10)
             plotParValues = parValues[plotStart:plotEnd].copy()
             plot.draw_yAxis([min(plotParValues),max(plotParValues)], parDict[parName]["precision"], optimalTicks = 5)
-            plot.plotData(t[plotStart:plotEnd], plotParValues, tag="long", color = COLOR_PLOTLINE)
-                
+            plot.plotData(t[plotStart:plotEnd], plotParValues, tag="long", color = COLOR_PLOTLINE)            
 
             # plot valve switch indicators
             if len(valve_t):

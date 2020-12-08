@@ -359,7 +359,7 @@ if __name__ == "__main__":
     if "IsWISaS_Controller" in deviceDict.keys():        
         vc = SerialDevices.IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port, deviceDict["IsWISaS_Controller"].baudRate)
     else:
-        vc = SerialDevices.ValveController("foobar", 0)
+        vc = SerialDevices.IsWISaS_Controller("foobar", 0)
 
     root = tk.Tk()
     root.title("ValveController")

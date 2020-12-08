@@ -91,7 +91,7 @@ def combine(primaryPath, secondaryPath, keyList = []):
 def load_confDict(path, numericEntries = True, enforceList = []):
     print("Load", path, "...")
     confDict = {}
-    f = open(path, 'r')
+    f = open(path, 'r', encoding="UTF-8")
     insideTable = False
     insideSubEntry = False
     currentSubEntryKey = ''

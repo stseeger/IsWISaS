@@ -89,6 +89,11 @@ class Buffer():
             result.append(list(map(lambda x: x[i], itertools.islice(self.dataBuffer, startIndex, self.length))))
 
         return(result)
+
+    def get_unit(self, parKey):
+        for p in self.parameters:
+            if p.name==parKey:
+                return p.unit
        
     # wrapper to get_data implementing the [] operator
     def __getitem__(self, parKey):

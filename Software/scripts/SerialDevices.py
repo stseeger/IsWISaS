@@ -161,6 +161,7 @@ class IsWISaS_Controller(SerialDevice):
 
     # ------- valve section -----------------
     def set_valve(self,valve):
+        if not self.status: return
         print("%s >> valve %d"%(self.deviceType,valve))
         self.serial.write(("valve %d\r"%(valve)).encode("utf-8"))
 

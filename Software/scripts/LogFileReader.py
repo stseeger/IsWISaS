@@ -260,13 +260,14 @@ class Reader():
         posC = f.tell()
 
         lineSize = posB-posA
-        lineCount = (posC-posA)/lineSize
+        lineCount = (posC-posA)/lineSize        
 
         lastTime = None
-        for n in range(1,5):
-            try:
-                f.seek(-lineSize*(n),1) # jump n lines before current position      
-                lastTime = self.parse_logFileLine(f.readline()).time
+        for n in range(1,5):            
+            try:                
+                f.seek((lineCount-n)*lineSize,0) # jump n lines before the end of the file
+                x = f.readline()                
+                lastTime = self.parse_logFileLine(x).time
                 break
             except:
                 pass
@@ -324,13 +325,13 @@ class Reader():
             rawLine = f.readline()
             try:
                 entry = self.parse_logFileLine(rawLine)
-                dataBuffer.add(entry.data, entry.time)
+                dataBuffer.add(entry.data, entry.time)                
             except:
                 fine = False
                 f.seek(lastPos)
 
         if proceed:
-            latestLogFile = self.list_logFiles[-1]
+            latestLogFile = self.list_logFiles()[-1]
             if  not self.current.path == latestLogFile:
                 self.open_logFile(latestLogFile)
                 self.update(dataBuffer)
@@ -338,7 +339,7 @@ class Reader():
         return dataBuffer
 
 
-    def create_dataBuffer(self, bufferSize = 1000):
+    def create_dataBuffer(self, bufferSize = 2000):
         """
         Creates a data dataBuffer object that can hold the data of the log file
         """
@@ -351,14 +352,41 @@ class Reader():
 
         return DataBuffer.Buffer(bufferSize, None, parList)
 
-    def fill_dataBuffer(self, dataBuffer=None, firstTime=None, lastTime=None):
+    def fill_dataBuffer_old(self, dataBuffer=None, firstTime=None, lastTime=None):
         """
         Returns a dataBuffer filled with log file data
         """
         if dataBuffer is None:
             dataBuffer = self.create_dataBuffer()
+            self.dataBuffer = dataBuffer
 
         logFileList = self.filter_logFiles(firstTime, lastTime)
+
+        for filepath in logFileList[:-1]:
+            self.read_logFile(filepath, dataBuffer)
+
+        self.open_logFile(logFileList[-1])
+        self.update(dataBuffer, proceed=False)
+
+        return dataBuffer
+
+    def fill_dataBuffer(self, dataBuffer=None, startTime=None, endTime=None):
+        """
+        Returns a dataBuffer filled with log file data
+        """
+        if dataBuffer is None:
+            dataBuffer = self.create_dataBuffer()
+            self.dataBuffer = dataBuffer
+
+        if startTime is None:
+            startTime = self.scan_logFileTime(self.get_mostRecentLogFile())
+        elif type(startTime) is str:
+            startTime = support.string2Secs(startTime)
+        else:
+            firstTime, lastTime = self.scan_logFileTime(self.get_mostRecentLogFile(), onlyFirst=False)            
+            startTime = lastTime + startTime       
+
+        logFileList = self.filter_logFiles(startTime, endTime)
 
         for filepath in logFileList[:-1]:
             self.read_logFile(filepath, dataBuffer)
@@ -374,6 +402,7 @@ if __name__ == "__main__":
     configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
     logDir = "../exampleLogs/1102"
     logDir = "../exampleLogs/2120"
+    logDir = "../../../picarroLogs/fake"
     
     s = Reader(configFile, logDir, "?")
 
