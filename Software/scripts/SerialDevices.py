@@ -149,6 +149,9 @@ class IsWISaS_Controller(SerialDevice):
         self.flowTargetA = 0
         self.flowTargetB = 0
 
+        self.maxFlowA = 255 * self.flowCalibration["A"]["set_slope"]
+        self.maxFlowB = 255 * self.flowCalibration["B"]["set_slope"]
+
     def get_something(self, cmd, attempts=3, waitTime=500):
 
         for attempt in range(attempts):
@@ -162,14 +165,23 @@ class IsWISaS_Controller(SerialDevice):
     # ------- valve section -----------------
     def set_valve(self,valve):
         if not self.status: return
-        print("%s >> valve %d"%(self.deviceType,valve))
-        self.serial.write(("valve %d\r"%(valve)).encode("utf-8"))
+
+        try:
+            splitValve = valve.split(".")
+            box   = int(splitValve[0])
+            valve = int(splitValve[1])
+            print("%s >> valve %d.%d"%(self.deviceType,box,valve))
+            self.serial.write(("valve %d.%d\r"%(box,valve)).encode("utf-8"))
+        except:
+            valve = int(valve)
+            print("%s >> valve %d"%(self.deviceType,valve))
+            self.serial.write(("valve %d\r"%(valve)).encode("utf-8"))
 
     def get_valve(self):
         response = self.get_something("valve")
 
         try:
-            return int(response)
+            return int(response.replace("valve>",""))
         except:
             return response        
 
@@ -180,24 +192,21 @@ class IsWISaS_Controller(SerialDevice):
             self.flowCalibration = {"A":{"set_slope":1.0,
                                          "set_intercept":0.0,
                                          "get_slope":1.0,
-                                         "get_intercept":0.0},
+                                         "get_intercept":0.0},                                         
                                     "B":{"set_slope":1.0,
                                          "set_intercept":0.0,
                                          "get_slope":1.0,
-                                         "get_intercept":0.0}}
+                                         "get_intercept":0.0}
+                                    }
         else:
-            self.calibration = calibration
-
-        fc = self.flowCalibration
-        self.maxFlowA = 5000 * fc["A"]["set_slope"] + fc["A"]["set_intercept"]
-        self.maxFlowB = 5000 * fc["B"]["set_slope"] + fc["B"]["set_intercept"]
+            self.flowCalibration = calibration
 
 
     def get_flow(self):
         response = self.get_something("flow")
         
         try:
-            result = [float(x) for x in response.split(" ")]
+            result = [float(x) for x in response.replace("flow>","",).split("|")]
             fc = self.flowCalibration
             flowA = result[0] * fc["A"]["get_slope"] + fc["A"]["get_intercept"]
             flowB = result[1] * fc["B"]["get_slope"] + fc["B"]["get_intercept"]
@@ -213,103 +222,15 @@ class IsWISaS_Controller(SerialDevice):
             return
         
         fc = self.flowCalibration
-        flowA = int(flowA * fc["A"]["set_slope"] + fc["B"]["set_intercept"])
-        flowB = int(flowB * fc["B"]["set_slope"] + fc["B"]["set_intercept"])
+        flowA = int((flowA+ fc["A"]["set_intercept"]) / fc["A"]["set_slope"])
+        flowB = int((flowB+ fc["B"]["set_intercept"]) / fc["B"]["set_slope"])
 
         self.flowTargetA = flowA
         self.flowTargetB = flowB
 
-        cmd = "flow %d %d"%(flowA, flowB)        
+        cmd = "flow %d %d\r"%(flowA, flowB)       
         self.serial.write(cmd.encode("utf-8"))
-
-#------------------------------------------
-
-class FlowController(SerialDevice):
-    def __init__(self, port, baudrate, calibration=None):
-                 
-        self.apply_calibration(calibration)
-
-        self.flowTargetA = 0
-        self.flowTargetB = 0
-
-        # open serial port via initialization method of super class
-        super(FlowController, self).__init__(port, baudrate, "FlowController")
-
-        # define method to be used for status checking
-        self.checkRequestMethod = self._raw_get
-        
-        if self.status == SerialDevice.CONNECTED:
-            self.serial.write(("get\r").encode("utf-8"))
-            self.readComPort(500)
-            self.check_status(verbose=True)
-
-        self.lastGetTime = time.time()
-        self.lastGetValueA = 0
-        self.lastGetValueB = 0
-
-    def apply_calibration(self, calibration=None):
-        if calibration is None:
-            self.cal = {"A":{"set_slope":1.0, "set_intercept":0.0, "get_slope":1.0,"get_intercept":0.0},
-                                "B":{"set_slope":1.0, "set_intercept":0.0, "get_slope":1.0,"get_intercept":0.0}}
-        else:
-            self.cal = calibration["controller"]
-
-        self.maxFlowA = 5.0 * self.cal["A"]["set_slope"] + self.cal["A"]["set_intercept"]
-        self.maxFlowB = 5.0 * self.cal["B"]["set_slope"] + self.cal["B"]["set_intercept"]
-        
-
-    def _raw_get(self):
-        #if self.status == SerialDevice.NOT_CONNECTED: return []
-        try:
-            self.serial.write(("get\r").encode("utf-8"))
-            rawResult = self.readComPort(500)
-            splitLine = rawResult[1].split(' ')
-            try:
-                self.lastGetValueA = float(splitLine[0])
-                self.lastGetValueB = float(splitLine[1])
-            except:
-                pass
-            return [rawResult]
-        except:
-            t = time.time()
-            self.lastGetValueA = float(int(t)%60) * 8.6
-            self.lastGetValueB = float(int(t+20)%70) * 8.6
-            return ['#']
-        
-
-    def get(self):
-        rawResult = self._raw_get()
-        if len(rawResult):
-            self.lastGetTime = time.time()
-            A = self.lastGetValueA
-            B = self.lastGetValueB
-            
-            A = (A-self.cal["A"]["get_intercept"])/self.cal["A"]["get_slope"]
-            B = (B-self.cal["B"]["get_intercept"])/self.cal["B"]["get_slope"]
-
-            return [round(A,2), round(B,2), self.flowTargetA, self.flowTargetB]
-                
-        return []
-
-    def set(self,flowRateA = None, flowRateB = None):
-
-        print("FlowController -> set %d %d"%(flowRateA, flowRateB))
-
-        if flowRateB is None:
-            self.flowTargetA = flowRateA
-            cmd = "set A %.2f"%(flowRateA-self.cal["A"]["get_intercept"])/self.cal["A"]["get_slope"]
-        elif flowRateA is None:
-            self.flowTargetB = flowRateB
-            cmd = "set B %.2f"%(flowRateB-self.cal["B"]["get_intercept"])/self.cal["B"]["get_slope"]
-        else:
-            self.flowTargetA = flowRateA
-            self.flowTargetB = flowRateB
-            cmd = "set %.2f %.2f"%((flowRateA-self.cal["A"]["get_intercept"])/self.cal["A"]["get_slope"],
-                                   (flowRateB-self.cal["B"]["get_intercept"])/self.cal["B"]["get_slope"])
-            
-        if self.status == SerialDevice.NOT_CONNECTED: return
-        self.serial.write(cmd.encode("utf-8"))
-    
+ 
 #------------------------------------------
 if __name__ == "__main__":
    
@@ -317,10 +238,10 @@ if __name__ == "__main__":
     deviceDict, portDict = scan_serialPorts([9600])
 
     c = IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port,
-                           deviceDict["IsWISaS_Controller"].baudRate)
-
-    #vc = ValveController(deviceDict["ValveController"].port, deviceDict["ValveController"].baudRate)
-    #time.sleep(1)
-    #vc.open(22)
+                           deviceDict["IsWISaS_Controller"].baudRate,
+                           flowCalibration = {"A":{"set_slope":0.721, "set_intercept":0, "get_slope":0.721, "get_intercept":0},
+                                              "B":{"set_slope":0.177, "set_intercept":0, "get_slope":0.177, "get_intercept":0}
+                                              }
+                           )
         
             

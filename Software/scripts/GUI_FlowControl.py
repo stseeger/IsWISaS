@@ -18,7 +18,7 @@ def secs2DateString(seconds_POSIX, stringFormat = "%m-%d/%H:%M:%S"):
 
 
 class FlowControlFrame(tk.Frame):
-    def __init__(self, master, fc, *args, **kwargs):
+    def __init__(self, master, fc, flowConfigFile="../config/flow.cfg", *args, **kwargs):
         super(FlowControlFrame,self).__init__(master, *args, **kwargs)
 
         self.fc = fc
@@ -32,13 +32,13 @@ class FlowControlFrame(tk.Frame):
         self.cycleStartTime = time.time()
         self.job = None
 
-        self.conf = configLoader.load_confDict("../config/flow.cfg")
+        self.conf = configLoader.load_confDict(flowConfigFile)        
         self.profiles = [self.conf["probeType"][key] for key in self.conf["probeType"].keys()]
 
         if not self.conf["logfile"]:
             logfilePath = None
 
-        self.fc.apply_calibration(configLoader.load_confDict("../config/flow.cal"))
+        #self.fc.apply_calibration(configLoader.load_confDict("../config/flow.cal"))
         
         #----------- preapre the dataBuffer (and logfile) ----------
         parList = [DataBuffer.Parameter(name = "flowValueA", unit = "mL/min", relevantDifference = self.conf["logPrecision"]),
@@ -120,11 +120,12 @@ class FlowControlFrame(tk.Frame):
 
     def changeFlowRate(self, event=None):
         if self.isFlushing:
-            self.fc.set(self.flushScaleA.get(), self.flushScaleB.get())
+            self.fc.set_flow(self.flushScaleA.get(), self.flushScaleB.get())
         else:
-            self.fc.set(self.measureScaleA.get(), self.measureScaleB.get())
+            self.fc.set_flow(self.measureScaleA.get(), self.measureScaleB.get())
 
-    def toggle_mode(self, isFlushing = None):
+    def toggle_mode(self, isFlushing = None):        
+
         defaultbg = colors["neutralButton"]
         activebg = colors["active"]
 
@@ -135,7 +136,7 @@ class FlowControlFrame(tk.Frame):
 
         self.button_flush.config(relief = [tk.RAISED, tk.SUNKEN][1*self.isFlushing], bg = [defaultbg, activebg][1*self.isFlushing])
         self.button_measure.config(relief = [tk.SUNKEN, tk.RAISED][1*self.isFlushing], bg = [activebg, defaultbg][1*self.isFlushing])
-        self.changeFlowRate()
+        self.changeFlowRate()        
         
     def set_flushMode(self, flushMode):
         self.toggle_mode(flushMode)
@@ -149,7 +150,7 @@ class FlowControlFrame(tk.Frame):
         else:
             newTargets = [self.measureScaleA.get(), self.measureScaleB.get()]          
             
-        self.dataBuffer.add(self.fc.get(), self.fc.lastGetTime)
+        self.dataBuffer.add(self.fc.get_flow(), time.time())
 
         t = self.dataBuffer.get_time()
 
@@ -158,7 +159,7 @@ class FlowControlFrame(tk.Frame):
             flowValueB = self.dataBuffer["flowValueB"]
             flowValueAB = [x + y for x, y in zip(flowValueA, flowValueB)]
 
-            self.plotCanvas.plotRangeY = [0,max(flowValueAB)]
+            self.plotCanvas.plotRangeY = [0,max(35,max(flowValueAB))]
 
             if len(flowValueA) > 2:
 
@@ -181,10 +182,13 @@ class FlowControlFrame(tk.Frame):
           
 
 if __name__ == "__main__":
+
+    calibration = configLoader.load_confDict("../config/flow.cal")["calibration"]
+
     import SerialDevices
     deviceDict, portDict = SerialDevices.scan_serialPorts(9600)
-    if "FlowController" in deviceDict.keys():        
-        fc = SerialDevices.FlowController(deviceDict["FlowController"].port, deviceDict["FlowController"].baudRate)
+    if "IsWISaS_Controller" in deviceDict.keys():        
+        fc = SerialDevices.IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port, deviceDict["IsWISaS_Controller"].baudRate, calibration)
     else:
         try:
             fc = SerialDevices.SierraFlowController(COM_Port_FlowController, 9600)
@@ -193,8 +197,8 @@ if __name__ == "__main__":
             fc = SerialDevices.FlowController("foobar", 0)
     root = tk.Tk()
     root.title("FlowController")
-    root.geometry("%dx%d+%d+%d"%(1280,480,1,0))
-    gui = FlowControlFrame(root, fc, relief=tk.RAISED)
+    root.geometry("%dx%d+%d+%d"%(1280,480,1,0))    
+    gui = FlowControlFrame(root, fc, flowConfigFile="../config/flow.cfg", relief=tk.RAISED)
     gui.pack(fill=tk.BOTH, expand=1)
     root.mainloop()
 

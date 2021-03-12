@@ -1,0 +1,4 @@
+#[%Y%m%d%H%M%S]	[mL/min]	[mL/min]	[mL/min]	[mL/min]
+timestamp	flowValueA	flowValueB	targetValueA	targetValueB
+20210309213135	255.27	252.79
+20210309213212	255.49	253.51

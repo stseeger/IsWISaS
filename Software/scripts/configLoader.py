@@ -103,11 +103,9 @@ def load_confDict(path, numericEntries = True, enforceList = []):
             insideTable = False
             continue
 
-        # replace %: with %# in order not to introduces unwanted pieces at the ':'
-        line = line.replace(":%","#%")
-
-        # split lines into key (before ':) and entry (after ':')
-        splitLine = line.split(':')
+        # split lines into key (before first ':) and entry (after first ':')
+        i = line.find(":")        
+        splitLine = [line[:i], line[i+1:]]
         key = splitLine[0].strip()        
 
         # split entry along ';'
@@ -116,8 +114,7 @@ def load_confDict(path, numericEntries = True, enforceList = []):
         else:
             entry = splitLine[1].split(';')
 
-        for i,part in enumerate(entry):
-            part = part.replace("#%",":%")
+        for i,part in enumerate(entry):           
             if isinstance(part, list):
                 for j, subPart in enumerate(part):
                     entry[i][j] = subPart.strip()

@@ -223,6 +223,8 @@ class Reader():
         #t = datetime.datetime.strptime(t, self.conf["timeFormatString"])
         #t = time.mktime(t.timetuple())
         t = support.string2Secs(t, self.conf["timeFormatString"])
+
+        #print(line)
         
         # best case: all entries are numeric
         try:
@@ -231,10 +233,13 @@ class Reader():
         except:
             data = []
             for i in colIndices["data"]:
-                try:
-                    entry = float(line[i])
-                except:
-                    entry = line[i]
+                if i is None:
+                    entry = 0
+                else:
+                    try:
+                        entry = float(line[i])
+                    except:                    
+                        entry = line[i]
                 data.append(entry)
             
 
@@ -339,7 +344,7 @@ class Reader():
         return dataBuffer
 
 
-    def create_dataBuffer(self, bufferSize = 2000):
+    def create_dataBuffer(self, bufferSize = 4000):
         """
         Creates a data dataBuffer object that can hold the data of the log file
         """

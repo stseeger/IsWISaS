@@ -14,14 +14,23 @@ def secs2DateString(seconds_POSIX, stringFormat = "%m-%d/%H:%M:%S"):
     return time.strftime(stringFormat,time.gmtime(seconds_POSIX))
 
 class Valve():
-    def __init__(self, name, probeType, slot, index, button, checkbox=None, stateVar=None):
+    def __init__(self, name, probeType, slot, index, button, checkbox, stateVar, group="A"):
         self.name  = name
         self.probeType = probeType
-        self.slot  = int(slot)
+
+        try:
+            splitSlot = slot.split('.')
+            self.box  = int(splitSlot[0])
+            self.slot = int(splitSlot[1])
+        except:
+            self.box  = 0
+            self.slot =int(slot)
+
         self.index = int(index)
         self.button = button
         self.checkbox = checkbox
-        self.stateVar = stateVar
+        self.stateVar = stateVar        
+        self.group = group
 
     def grid(self, row, column):
         self.button.grid(row=row, column=column, sticky = "nsew")
@@ -30,17 +39,21 @@ class Valve():
             self.checkbox.select()
 
     def __repr__(self):
-        return("<\"%s\"(%s; slot %s)>"%(self.name, self.probeType, self.slot))
+        return("<\"%s\"(%s)>"%(self.name, self.probeType))
         
 
 class ValveControlFrame(tk.Frame):
-    def __init__(self, master, vc, logfilePath, *args, **kwargs):
+    def __init__(self, master, vc, logfilePath, valveConfigFile = "../config/valve.cfg", *args, **kwargs):
         super(ValveControlFrame,self).__init__(master, *args, **kwargs)
 
         self.master = master
         self.vc=vc
-        self.conf = configLoader.load_confDict("../config/valve.cfg")
+        self.conf = configLoader.load_confDict(valveConfigFile)
         self.valves = self.conf["valve"]
+
+        for i,valveSlot in enumerate(self.valves.keys()):
+            if not "group" in self.valves[valveSlot].keys():
+                self.valves[valveSlot]["group"] = "A"
 
         buffPar = DataBuffer.Parameter(name = "ID", unit = "active valve")
         self.valveBuffer = DataBuffer.Buffer(100, self.conf["logFile"], parameters = buffPar)                                                                                    
@@ -55,11 +68,6 @@ class ValveControlFrame(tk.Frame):
         self.buttonFrame2 = tk.Frame(self, width=640)
         self.buttonFrame2.pack(side=tk.TOP, fill=tk.X)
         #self.buttonFrame2.config(bg="blue")
-
-        self.lowerFrame = tk.Frame(self)
-        self.lowerFrame.pack(side=tk.BOTTOM, expand=1, fill=tk.BOTH)
-        self.lowerFrame.config(bg="#ccc")
-        tk.Label(self.lowerFrame, text="Space for extensions").pack(side=tk.TOP)
 
         self.activeValve = 1
         self.sequencePosition = -1
@@ -85,6 +93,9 @@ class ValveControlFrame(tk.Frame):
 
             valveName = self.valves[valveSlot]["name"]
             probeType = self.valves[valveSlot]["probeType"]
+          
+            bgCol = colors["group_"+self.valves[valveSlot]["group"]]
+            
             if not len(valveName):
                 continue
 
@@ -96,15 +107,19 @@ class ValveControlFrame(tk.Frame):
             tk.Grid.columnconfigure(self.buttonFrame, n, weight=1)
 
             button = tk.Button(self.buttonFrame, command = lambda j = n: self.valveButton_click(j),
-                               font = self.font, text = ("%d\n"%(i+1))+valveName, height = 2)
+                               font = self.font, text = valveName, height = 2, bg=bgCol)
 
-            stateVar = tk.IntVar()
+            stateVar = tk.IntVar()            
+
             checkbox = tk.Checkbutton(self.buttonFrame, text="", variable=stateVar,
                                       command = self.update_valveButtons, relief=tk.FLAT)
+            
            
-            self.valveList.append(Valve(valveName, probeType, valveSlot, n, button, checkbox, stateVar))
+            group = self.conf["valve"][valveSlot]["group"]
+            self.valveList.append(Valve(valveName, probeType, valveSlot, n, button, checkbox, stateVar, group))
             self.valveList[-1].grid(row=0, column=n)
-                         
+
+            
             
 
         # ---- create valve sequence buttons -----------
@@ -126,7 +141,8 @@ class ValveControlFrame(tk.Frame):
             checkbox = tk.Checkbutton(self.buttonFrame2, text="",variable=stateVar,
                                       command = self.update_valveButtons, relief=tk.FLAT)
 
-            self.valveSequence.append(Valve(valveName, probeType, valveSlot, i, button, checkbox, stateVar))
+            group = self.conf["valve"][valveSlot]["group"]
+            self.valveSequence.append(Valve(valveName, probeType, valveSlot, i, button, checkbox, stateVar, group))
             self.valveSequence[-1].grid(row=0, column=i+1)  
 
         #------ sequence start stop button--------------------------------
@@ -174,6 +190,11 @@ class ValveControlFrame(tk.Frame):
         self.sequenceButton_click(0)
         #self.sequenceButton_click(0,False)
 
+        for i,valveSlot in enumerate(self.valves.keys()):
+            self.valveList[i].stateVar.set(int(self.conf["valve"][valveSlot]["state"] > 0))
+        self.update_valveButtons()
+            
+
     #================================================================================
 
     def hide_infoFrame(self, event=None):
@@ -181,8 +202,8 @@ class ValveControlFrame(tk.Frame):
 
     def set_currentProbeProfile(self, valveIndex=None, name=None):
 
-        if name is None:
-            name = self.valveList[valveIndex].name
+        if valveIndex is None: valveIndex = 0
+        if name is None: name = self.valveList[valveIndex].name
             
         probeType = self.valves[self.valveToSlotDict[name]]["probeType"]
         try:
@@ -208,7 +229,7 @@ class ValveControlFrame(tk.Frame):
         self.flowMode = newMode
 
         if change:
-            print("toggle to %s mode"%newMode)
+            #print("toggle to %s mode"%newMode)
             if newMode == "flush":
                 self.startTime = time.time()        
 
@@ -241,6 +262,15 @@ class ValveControlFrame(tk.Frame):
     def measuredEnough(self):
         return (self.flowMode == "measure") and (self.currentDuration() >= self.currentProbeProfile["mDuration"])
 
+
+    def get_nextValve(self):
+        remainingPart = list(range(self.sequencePosition+1, len(self.valveSequence)))
+        passedPart = list(range(0, self.sequencePosition)) + [self.sequencePosition]
+        for nextPos in (remainingPart + passedPart):
+            if self.valveSequence[nextPos].stateVar.get():
+                break
+        return nextPos
+
     def continueSequence(self):
 
         nowTime = time.time()
@@ -251,14 +281,7 @@ class ValveControlFrame(tk.Frame):
             self.startTime = time.time()
 
         if self.measuredEnough():
-            remainingPart = list(range(self.sequencePosition+1, len(self.valveSequence)))
-            passedPart = list(range(0, self.sequencePosition)) + [self.sequencePosition]            
-            for nextPos in (remainingPart + passedPart):
-                if self.valveSequence[nextPos].stateVar.get():
-                    break
-                else:
-                    print("skip deactivated", self.valveSequence[nextPos])
-            self.sequenceButton_click(nextPos, True)
+            self.sequenceButton_click(self.get_nextValve(), True)
 
         
         self._job = self.after(500, self.continueSequence)
@@ -294,15 +317,25 @@ class ValveControlFrame(tk.Frame):
             else:
                 bgColor = colors["static"]
 
-        self.buttonFrame.config(bg=bgColor)
-        self.buttonFrame2.config(bg=bgColor)
+        # this is just for the looks, and with a lot of valves it gets slow and ugly...
+        #self.buttonFrame.config(bg=bgColor)
+        #self.buttonFrame2.config(bg=bgColor)
 
         buttonColors = [colors["neutralButton"], colors[self.flowMode]]
         for n,buttonList in enumerate([self.valveList, self.valveSequence]):            
             for i, button in enumerate(buttonList):
+
+                buttonColors[0] = colors["group_"+button.group]
+                
                 index = [i==self.activeValve, i==self.sequencePosition][n]
-                button.button.config(bg=[buttonColors[index]], relief = [tk.RAISED, tk.GROOVE][index])
-                button.checkbox.config(bg=colors["neutralButton"])
+                
+                newCol = buttonColors[index]
+
+                if button.button['bg'] != newCol:
+                    button.button.config(bg=newCol, relief = [tk.RAISED, tk.GROOVE][index])
+
+                if button.checkbox['bg'] != newCol:
+                    button.checkbox.config(bg=newCol)
                 
                 # deactivate button on the valveSequence level, when the corresponding valve button
                 # has been deactivated
@@ -317,7 +350,7 @@ class ValveControlFrame(tk.Frame):
 
 
         flushDuration = self.currentProbeProfile["fDuration"]        
-        measureDuration = self.currentProbeProfile["mDuration"]
+        measureDuration = self.currentProbeProfile["mDuration"]        
 
         if duration:           
             self.progBars[self.flowMode]["bar"].configure(value=duration)
@@ -341,11 +374,11 @@ class ValveControlFrame(tk.Frame):
             self.toggle_flowMode()            
             
         else:
-            print("------------------\nactive probe: "+str(self.valveList[self.valveToIndexDict[valveName]]))
-            self.toggle_flowMode("flush")
-            self.vc.set_valve(int(self.valveToSlotDict[valveName]))
+            print("------------------\nactive probe: "+str(self.valveList[self.valveToIndexDict[valveName]]))            
+            self.vc.set_valve(self.valveToSlotDict[valveName])
             self.set_currentProbeProfile(name=valveName)
             self.valveBuffer.add(valveName)
+            self.toggle_flowMode("flush")
             
         self.update_valveButtons()
         self.update_progressBars()
@@ -363,8 +396,9 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     root.title("ValveController")
-    root.geometry("%dx%d+%d+%d"%(800,150,1,0))
-    g = ValveControlFrame(root, vc, "../log/%s.vlg"%secs2DateString(time.time(), "%Y%m%d%H%M%S"), relief=tk.RAISED)
+    root.geometry("%dx%d+%d+%d"%(1200,120,1,0))
+    valveLogFile = "../log/%s.vlg"%secs2DateString(time.time(), "%Y%m%d%H%M%S")
+    g = ValveControlFrame(root, vc, valveLogFile, valveConfigFile = "../config/valve.cfg", relief=tk.RAISED)
     g.pack(fill=tk.BOTH, expand=1)
     root.mainloop()
         
