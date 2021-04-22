@@ -1,5 +1,0 @@
-#[%Y%m%d%H%M%S]	[mL/min]	[mL/min]	[mL/min]	[mL/min]
-timestamp	flowValueA	flowValueB	targetValueA	targetValueB
-20210309215157	24.6582	10.30976
-20210309215224	24.795189999999998	10.357819999999998
-20210309215226	0.0	0.0

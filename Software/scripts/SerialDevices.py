@@ -3,6 +3,7 @@ import time
 import sys
 import glob
 import io
+import json
 
 def detect_serialPorts():
     """ Lists serial port names
@@ -30,6 +31,7 @@ def detect_serialPorts():
             devices.append(port)
         except (OSError, serial.SerialException):
             pass
+        
     return devices
 
 class DeviceInfo:
@@ -38,7 +40,20 @@ class DeviceInfo:
         self.baudRate = baudRate
         self.name = name
     
-def scan_serialPorts(baudRate = [1200,9600]):
+def scan_serialPorts(baudRate = [1200,9600], cachePath = None, refresh_cache = False):
+
+    if not refresh_cache:
+        # try to avoid the scan by loading from a chached scan result
+        try:
+            with open(cachePath,'r') as infile:
+                cache = json.load(infile)
+            deviceDict = cache["devices"]
+            portDict   = cache["ports"]
+            print("Loaded chached serial port scan results from "+ cachePath)
+            return deviceDict, portDict 
+        except:
+            pass            
+
     if type(baudRate) == int:
         baudRate = [baudRate]
     print("scanning available serial ports...")
@@ -49,11 +64,33 @@ def scan_serialPorts(baudRate = [1200,9600]):
         for bR in baudRate:
             d = SerialDevice(port, bR)
             d.serial.close()
-            info = DeviceInfo(port, bR, d.deviceType)            
-            if not info.name == 'SerialDevice':
+            info = {"port" : port, "baudRate" : bR, "name" : d.deviceType}
+            if not info["name"] == 'SerialDevice':
                 portDict[port] = info
                 deviceDict[d.deviceType] = info
+
+    try:
+        with open(cachePath,'w') as outfile:
+            json.dump({"devices":deviceDict, "ports":portDict}, outfile)
+        print("Serial port scan results stored in " + cachePath)
+    except:
+        print("Serial port scan results could not be stored in " + cachePath)
+
     return deviceDict, portDict
+
+def find_device(name, baudRate = [1200, 9600], cachePath = None):
+    
+    deviceDict, portDict = scan_serialPorts(baudRate, cachePath)
+
+    if name in deviceDict.keys():
+        return deviceDict[name]
+
+    deviceDict, portDict = scan_serialPorts(baudRate, cachePath, refresh_cache=True)
+
+    if name in deviceDict.keys():
+        return deviceDict[name]
+
+    return None
     
 
 class SerialDevice:
@@ -149,6 +186,9 @@ class IsWISaS_Controller(SerialDevice):
         self.flowTargetA = 0
         self.flowTargetB = 0
 
+        self.box  = 0
+        self.valve = 0
+
         self.maxFlowA = 255 * self.flowCalibration["A"]["set_slope"]
         self.maxFlowB = 255 * self.flowCalibration["B"]["set_slope"]
 
@@ -163,19 +203,23 @@ class IsWISaS_Controller(SerialDevice):
         return None
 
     # ------- valve section -----------------
-    def set_valve(self,valve):
+    def set_valve(self, valve, verbose=True):
         if not self.status: return
 
         try:
-            splitValve = valve.split(".")
+            splitValve = valve.split("#")
             box   = int(splitValve[0])
             valve = int(splitValve[1])
-            print("%s >> valve %d.%d"%(self.deviceType,box,valve))
-            self.serial.write(("valve %d.%d\r"%(box,valve)).encode("utf-8"))
+            print(">> valve %d#%d"%(box,valve))
+            self.serial.write(("valve %d#%d\r"%(box,valve)).encode("utf-8"))
+            self.box = box
+            self.valve = valve
         except:
             valve = int(valve)
-            print("%s >> valve %d"%(self.deviceType,valve))
+            print(">> valve %d"%(valve))
             self.serial.write(("valve %d\r"%(valve)).encode("utf-8"))
+            self.box = 0
+            self.valve = valve
 
     def get_valve(self):
         response = self.get_something("valve")
@@ -201,21 +245,24 @@ class IsWISaS_Controller(SerialDevice):
         else:
             self.flowCalibration = calibration
 
+        self.maxFlowA = 255 * self.flowCalibration["A"]["set_slope"]
+        self.maxFlowB = 255 * self.flowCalibration["B"]["set_slope"]
 
-    def get_flow(self):
+
+    def get_flow(self, decimalPlaces=1):
         response = self.get_something("flow")
         
         try:
             result = [float(x) for x in response.replace("flow>","",).split("|")]
             fc = self.flowCalibration
-            flowA = result[0] * fc["A"]["get_slope"] + fc["A"]["get_intercept"]
-            flowB = result[1] * fc["B"]["get_slope"] + fc["B"]["get_intercept"]
+            flowA = round(result[0] * fc["A"]["get_slope"] + fc["A"]["get_intercept"], decimalPlaces)
+            flowB = round(result[1] * fc["B"]["get_slope"] + fc["B"]["get_intercept"], decimalPlaces)
             return [flowA, flowB]
         except:
             return response
 
     def set_flow(self, flowA, flowB = 0):
-        print("%s >> flow %d %d"%(self.deviceType, flowA, flowB))
+        print(">> flow %d %d"%(flowA, flowB))
 
         if self.status == SerialDevice.NOT_CONNECTED:
             print("!! no serial connection to device !!")
@@ -235,10 +282,12 @@ class IsWISaS_Controller(SerialDevice):
 if __name__ == "__main__":
    
     print("Available serial ports:", detect_serialPorts()) 
-    deviceDict, portDict = scan_serialPorts([9600])
+    #deviceDict, portDict = scan_serialPorts([9600], cachePath = "../temp/serial.cch")
 
-    c = IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port,
-                           deviceDict["IsWISaS_Controller"].baudRate,
+    d = find_device("IsWISaS_Controller", baudRate = [9600], cachePath = "../temp/serial.cch")
+
+    c = IsWISaS_Controller(d["port"],
+                           d["baudRate"],
                            flowCalibration = {"A":{"set_slope":0.721, "set_intercept":0, "get_slope":0.721, "get_intercept":0},
                                               "B":{"set_slope":0.177, "set_intercept":0, "get_slope":0.177, "get_intercept":0}
                                               }

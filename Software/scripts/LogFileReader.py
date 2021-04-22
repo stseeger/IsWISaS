@@ -3,6 +3,7 @@ import gzip
 import datetime
 import time
 import sys
+import collections
 
 import support
 import configLoader
@@ -16,6 +17,7 @@ class LogFileEntry():
     def __repr__(self):
         return support.secs2String(self.time,"%Y-%m-%d %H:%M:%S") + str(self.data)
 
+
 class ExtendedFileHandle():
     def __init__(self, handle, path, columnOfParameter, columnsOfTimeAndData):
         self.handle = handle
@@ -24,16 +26,17 @@ class ExtendedFileHandle():
         self.columnsOfTimeAndData = columnsOfTimeAndData
 
 class Reader():
-    def __init__(self, configFile, logDir, logScheme = '?'):
+    def __init__(self, configFile, logDir, logScheme = '?', bufferSize = 4000, startTimeFromFilepathFun = None):
         self.logDir = logDir
-        conf = configLoader.load_confDict(configFile)     
+        conf = configLoader.load_confDict(configFile)        
+        
         if logScheme == '?':
             logScheme = self.detect_logScheme(conf)
             print("Detected logFile scheme:", logScheme)
         self.logScheme = logScheme
         self.conf    = conf[logScheme]
-        self.columns = {}
-        self.units = {}
+        self.columns = collections.OrderedDict()
+        self.units = collections.OrderedDict()
         for qualifier in ["essential","optional"]:
             if not qualifier+"Columns" in conf.keys():
                 continue
@@ -44,6 +47,13 @@ class Reader():
         self.current = None
         self.dataBuffer = None
         self.lastTime = 0
+        self.bufferSize = bufferSize
+
+        self.startTimeFromFilepathFun = startTimeFromFilepathFun
+
+        sys.stdout.write("Filling data buffer...")
+        self.fill_dataBuffer()
+        sys.stdout.write("done!\n")
 
     def list_logFiles(self, pattern = None, logDir = None):
         """
@@ -53,11 +63,13 @@ class Reader():
         pattern -- naming pattern of the logFiles (defaults to self.conf["logFilePattern"])
         logDir -- root directory of the logFiles (defaults to self.logDir)
         """
+        
         if logDir is None:
             logDir = self.logDir
         if pattern is None:
             pattern = self.conf["logFilePattern"]
-        pattern = "\/".join(support.formatStrings2RegEx(pattern).split('/'))
+            
+        pattern = "\/".join(support.formatStrings2RegEx(pattern).split('/'))               
         matchingFiles = support.recursiveFileList(logDir, pattern)
         return sorted(matchingFiles)
 
@@ -113,15 +125,18 @@ class Reader():
 
         Keyword arguments:
         header -- a list of strings containing column names
-        columnDict -- a dictionary where the keys are internal and the entries log file column names (defaults to self.columns)
+        columnDict -- a dictionary where the keys are internal and the entries
+                      log file column names (defaults to self.columns)
         
         Return arguments:
-        (result, found) -- result: equivalent to columnDict, but entries are indices where the entries of columnDict where found within the header; found: number 
+        (result, found) -- result: equivalent to columnDict, but entries are
+                           indices where the entries of columnDict where found
+                           within the header; found: number 
         """
         if columnDict is None:
             columnDict = self.columns
         
-        result = {}
+        result = collections.OrderedDict()
         found = []
 
         for key in columnDict.keys():
@@ -139,41 +154,41 @@ class Reader():
         """
         Returns the name of the detected scheme of logfiles found in self.logDir.
         """
-        fileLists = {}
-        fileCounts = {}        
+        fileLists = collections.OrderedDict()
+        fileCounts = collections.OrderedDict()        
         
-        # get lists of possible log files based on the specified naming patterns
+        # get lists of possible log files based on the specified naming patterns        
 
         for key in conf.keys():            
-            if key in ["essentialColumns", "optionalColumns"]:
-                continue
+            if key in ["essentialColumns", "optionalColumns", "confFile"]:
+                continue            
 
             fileLists[key] = self.list_logFiles(conf[key]["logFilePattern"])
-            fileCounts[key] = len(fileLists[key])
+            fileCounts[key] = len(fileLists[key])            
 
         # select all naming patterns that return any possible log file
-        candidates = {}
+        candidates = collections.OrderedDict()
         for key in fileCounts.keys():
             if fileCounts[key]:
-                candidates[key] = {}
+                candidates[key] = collections.OrderedDict()
 
         # scan the first logFile for each log file scheme
         maxScore = 0
-        for candidate in candidates.keys():
+        for candidate in candidates.keys():            
 
-            header, n = self.get_logFileHeader(fileLists[candidate][0], conf[candidate])
+            header, n = self.get_logFileHeader(fileLists[candidate][0], conf[candidate])            
 
             # now scan the header for columns specified in the configuration file
             for qualifier in ["essential","optional"]:                    
                 candidates[candidate][qualifier+"Columns"], candidates[candidate][qualifier+"Matches"] =\
-                                    self.scan_logFileHeader(header, conf[qualifier+"Columns"][candidate])
+                                    self.scan_logFileHeader(header, conf[qualifier+"Columns"][candidate])                
 
             # in case all essential and optional columns were found, directly return the current candidate
             #if min(candidates[candidate]["essentialMatches"] + candidates[candidate]["optionalMatches"]):
              #   return candidate
 
             # compute a score for the candidate which is always zero if one essential column is missing
-            candidates[candidate]["score"] = min(candidates[candidate]["essentialMatches"]) * sum(candidates[candidate]["optionalMatches"])
+            candidates[candidate]["score"] = min(candidates[candidate]["essentialMatches"]) * (1+sum(candidates[candidate]["optionalMatches"]))
 
             #keep track of the achieved maximum score
             maxScore = max([maxScore, candidates[candidate]["score"]])
@@ -187,20 +202,28 @@ class Reader():
         logDir = self.logDir
         raise Exception(logDir + " does not seem to contain usable logFiles...")
 
-    def open_logFile(self, logFile):
+    def open_logFile(self, logFile, fallbackFile = None):
         """
         Scans the header of a log file and returns a file handler.
         """
-        header, n = self.get_logFileHeader(logFile)
-        pos, available = self.scan_logFileHeader(header)
-        logFileSpecs = self.conf
+
+        # this loop is needed to prevent problems that may occur when
+        #   a new log file already exists, but does not yet contain any data
+        for filepath in [logFile, fallbackFile]:
+            header, n = self.get_logFileHeader(filepath)        
+            pos, available = self.scan_logFileHeader(header)
+            if True in available:
+                break
+
+        logFile = filepath
         
-        colIndices={"time":[], "data":[]}
+        colIndices={"time":[], "data":[]}        
         for column in pos.keys():
-            if column in logFileSpecs["timeColumns"]:
+            if column in self.conf["timeColumns"]:
                 colIndices["time"].append(pos[column])
             else:
-                colIndices["data"].append(pos[column])
+                if not pos[column] is None:
+                    colIndices["data"].append(pos[column])
 
         f = self.raw_open_logFile(logFile, n)
 
@@ -249,6 +272,10 @@ class Reader():
         """
         Returns the first (and optionaly last) time within a log file
         """
+
+        if onlyFirst and not self.startTimeFromFilepathFun is None:
+            return self.startTimeFromFilepathFun(filepath)
+        
         f=self.open_logFile(filepath)
         posA = f.tell()
 
@@ -304,9 +331,9 @@ class Reader():
     def read_logFile(self, filepath, dataBuffer):
         """
         Reads a complete (all lines are expected to be complete) log file into a dataBuffer
-        """
+        """        
         f = self.open_logFile(filepath)
-        for rawLine in f.readlines():
+        for rawLine in f.readlines():           
             entry = self.parse_logFileLine(rawLine)
             dataBuffer.add(entry.data, entry.time)
         return dataBuffer
@@ -328,17 +355,18 @@ class Reader():
         while fine:
             lastPos = f.tell()
             rawLine = f.readline()
+            #print(rawLine)
             try:
                 entry = self.parse_logFileLine(rawLine)
-                dataBuffer.add(entry.data, entry.time)                
+                dataBuffer.add(entry.data, entry.time)               
             except:
                 fine = False
                 f.seek(lastPos)
 
         if proceed:
-            latestLogFile = self.list_logFiles()[-1]
-            if  not self.current.path == latestLogFile:
-                self.open_logFile(latestLogFile)
+            latestLogFile = self.get_mostRecentLogFile()            
+            if  not self.current.path == latestLogFile:                
+                self.open_logFile(latestLogFile, self.current.path)
                 self.update(dataBuffer)
 
         return dataBuffer
@@ -350,37 +378,20 @@ class Reader():
         """
         reverseColumnDict = support.reverse_dict(self.columns)
         parList = []
-        for column in self.columns.keys():
-            if self.columns[column] in self.conf["timeColumns"]:
-                continue
+        for column in self.columns.keys():            
+            if self.columns[column] in self.conf["timeColumns"] or self.columns[column] == '?':
+                continue            
             parList.append(DataBuffer.Parameter(name = column, unit=self.units[column]))
 
         return DataBuffer.Buffer(bufferSize, None, parList)
-
-    def fill_dataBuffer_old(self, dataBuffer=None, firstTime=None, lastTime=None):
-        """
-        Returns a dataBuffer filled with log file data
-        """
-        if dataBuffer is None:
-            dataBuffer = self.create_dataBuffer()
-            self.dataBuffer = dataBuffer
-
-        logFileList = self.filter_logFiles(firstTime, lastTime)
-
-        for filepath in logFileList[:-1]:
-            self.read_logFile(filepath, dataBuffer)
-
-        self.open_logFile(logFileList[-1])
-        self.update(dataBuffer, proceed=False)
-
-        return dataBuffer
+    
 
     def fill_dataBuffer(self, dataBuffer=None, startTime=None, endTime=None):
         """
         Returns a dataBuffer filled with log file data
         """
         if dataBuffer is None:
-            dataBuffer = self.create_dataBuffer()
+            dataBuffer = self.create_dataBuffer(self.bufferSize)
             self.dataBuffer = dataBuffer
 
         if startTime is None:
@@ -391,12 +402,16 @@ class Reader():
             firstTime, lastTime = self.scan_logFileTime(self.get_mostRecentLogFile(), onlyFirst=False)            
             startTime = lastTime + startTime       
 
-        logFileList = self.filter_logFiles(startTime, endTime)
+        logFileList = self.filter_logFiles(startTime, endTime)        
 
-        for filepath in logFileList[:-1]:
+        for filepath in logFileList[:-1]:            
             self.read_logFile(filepath, dataBuffer)
 
-        self.open_logFile(logFileList[-1])
+        if len(logFileList)>1:
+            self.open_logFile(logFileList[-1], logFileList[-2])
+        else:            
+            self.open_logFile(logFileList[-1])
+            
         self.update(dataBuffer, proceed=False)
 
         return dataBuffer
@@ -404,11 +419,15 @@ class Reader():
             
 if __name__ == "__main__":
 
-    configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
-    logDir = "../exampleLogs/1102"
-    logDir = "../exampleLogs/2120"
-    logDir = "../../../picarroLogs/fake"
-    
-    s = Reader(configFile, logDir, "?")
+    configFile = "../config/logDescriptors/IsWISaS_valveLog.lgd"
+    t = Reader(configFile, "../log")
 
-    b=s.fill_dataBuffer()
+    print(t.dataBuffer.get_time())
+
+    #configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
+    #logDir = "../exampleLogs/1102"
+    #logDir = "../exampleLogs/2120"
+    #logDir = "../../../picarroLogs/fake"
+    
+    #s = Reader(configFile, logDir, "?")    
+            

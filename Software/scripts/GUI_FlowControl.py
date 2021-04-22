@@ -2,24 +2,17 @@ import tkinter as tk
 from tkinter import font as tkFont
 import datetime
 import time
-import PlotCanvas
 import os
+
+import PlotCanvas
 import DataBuffer
 import configLoader
 
 colors = configLoader.load_confDict("../config/default/colors.cfg")
 
-
-# format POSIX seconds to a certain time format
-def secs2DateString(seconds_POSIX, stringFormat = "%m-%d/%H:%M:%S"):
-    return time.strftime(stringFormat,time.gmtime(seconds_POSIX))
-
-
-
-
 class FlowControlFrame(tk.Frame):
     def __init__(self, master, fc, flowConfigFile="../config/flow.cfg", *args, **kwargs):
-        super(FlowControlFrame,self).__init__(master, *args, **kwargs)
+        super(FlowControlFrame,self).__init__(master,*args, **kwargs)
 
         self.fc = fc
         self.status = -1
@@ -33,7 +26,7 @@ class FlowControlFrame(tk.Frame):
         self.job = None
 
         self.conf = configLoader.load_confDict(flowConfigFile)        
-        self.profiles = [self.conf["probeType"][key] for key in self.conf["probeType"].keys()]
+        self.profiles = [self.conf["profile"][key] for key in self.conf["profile"].keys()]
 
         if not self.conf["logfile"]:
             logfilePath = None
@@ -41,17 +34,18 @@ class FlowControlFrame(tk.Frame):
         #self.fc.apply_calibration(configLoader.load_confDict("../config/flow.cal"))
         
         #----------- preapre the dataBuffer (and logfile) ----------
-        parList = [DataBuffer.Parameter(name = "flowValueA", unit = "mL/min", relevantDifference = self.conf["logPrecision"]),
-                   DataBuffer.Parameter(name = "flowValueB", unit = "mL/min", relevantDifference = self.conf["logPrecision"]),
-                   DataBuffer.Parameter(name = "targetValueA", unit = "mL/min", relevantDifference = 0),
-                   DataBuffer.Parameter(name = "targetValueB", unit = "mL/min", relevantDifference = 0)]
+        rD    = self.conf["relevantDifference"]        
+        parList = [DataBuffer.Parameter(name = "flowValueA",   unit = "mL/min", relevantDifference = rD),
+                   DataBuffer.Parameter(name = "flowValueB",   unit = "mL/min", relevantDifference = rD),
+                   DataBuffer.Parameter(name = "targetValueA", unit = "mL/min", relevantDifference =  0),
+                   DataBuffer.Parameter(name = "targetValueB", unit = "mL/min", relevantDifference =  0)]
         
         if "logfile" in self.conf.keys():
             logfile = self.conf["logfile"]
         else:
             None
         
-        self.dataBuffer = DataBuffer.Buffer(600, logfile, parList, flushChunk=20)
+        self.dataBuffer = DataBuffer.Buffer(int(self.conf["bufferSize"]), logfile, parList, flushChunk=20)
 
         
 
@@ -67,36 +61,35 @@ class FlowControlFrame(tk.Frame):
         tk.Label(self.leftFrame, text="B", font = self.font, bg = colors["fcB"]).grid(row=1,column=3,columnspan=1,sticky="nsew")        
 
         self.button_flush = tk.Button(self.leftFrame, command=self.toggle_mode, text="flush" , font=self.font, wraplength = 1, relief = tk.SUNKEN, bg=colors["active"])
-        self.button_flush.grid(row=2, column=1,sticky="nsew")
+        self.button_flush.grid(row=3, column=1,sticky="nsew")
         self.button_measure = tk.Button(self.leftFrame, command=self.toggle_mode, text="measure" , font=self.font, wraplength = 1, relief = tk.RAISED)
-        self.button_measure.grid(row=3, column=1,sticky="nsew")
+        self.button_measure.grid(row=2, column=1,sticky="nsew")
         colors["neutralButton"] = self.button_measure.cget("bg")
 
         self.flushScaleA = tk.Scale(self.leftFrame, from_=fc.maxFlowA, to=0, orient=tk.VERTICAL, length=50, bg=colors["flush"])
-        self.flushScaleA.grid(row=2, column=2, sticky="nsew")
+        self.flushScaleA.grid(row=3, column=2, sticky="nsew")
         self.flushScaleA.set(self.profiles[0]["fRateA"])
         self.flushScaleA.bind("<ButtonRelease-1>", self.changeFlowRate)
 
         self.measureScaleA = tk.Scale(self.leftFrame, from_=fc.maxFlowA, to=0, orient=tk.VERTICAL, length=50, bg=colors["measure"])
-        self.measureScaleA.grid(row=3, column=2, sticky="nsew")
+        self.measureScaleA.grid(row=2, column=2, sticky="nsew")
         self.measureScaleA.set(self.profiles[0]["mRateA"])
         self.measureScaleA.bind("<ButtonRelease-1>", self.changeFlowRate)
 
         self.flushScaleB = tk.Scale(self.leftFrame, from_=fc.maxFlowB, to=0, orient=tk.VERTICAL, length=50, bg=colors["flush"])
-        self.flushScaleB.grid(row=2, column=3, sticky="nsew")
+        self.flushScaleB.grid(row=3, column=3, sticky="nsew")
         self.flushScaleB.set(self.profiles[0]["fRateB"])
         self.flushScaleB.bind("<ButtonRelease-1>", self.changeFlowRate)
 
         self.measureScaleB = tk.Scale(self.leftFrame, from_=fc.maxFlowB, to=0, orient=tk.VERTICAL, length=50, bg=colors["measure"])
-        self.measureScaleB.grid(row=3, column=3, sticky="nsew")
+        self.measureScaleB.grid(row=2, column=3, sticky="nsew")
         self.measureScaleB.set(self.profiles[0]["mRateB"])
         self.measureScaleB.bind("<ButtonRelease-1>", self.changeFlowRate)
 
 
         #------ right frame: plot canvas ------
-        self.plotCanvas = PlotCanvas.PlotCanvas(self, plotRangeX=[0,20],plotRangeY=[0,50],
-                                                marginX=50,marginY=25, height=400, width=400,
-                                                axes=True, bg="white")
+        self.plotCanvas = PlotCanvas.PlotCanvas(self, plotRangeX=[0,20], plotRangeY=[0,50], axes=True, bg="white",
+                                                marginX=50,marginY=25, height = 300, width  = 400)
         self.plotCanvas.create_text(400, 50, text="waiting for connection...", font = tkFont.Font(size=20), tags = "initial")
 
         self.plotCanvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=1)
@@ -150,9 +143,9 @@ class FlowControlFrame(tk.Frame):
         else:
             newTargets = [self.measureScaleA.get(), self.measureScaleB.get()]          
             
-        self.dataBuffer.add(self.fc.get_flow(), time.time())
+        self.dataBuffer.add(self.fc.get_flow(int(self.conf["decimalPlaces"])) + newTargets, time.time())
 
-        t = self.dataBuffer.get_time()
+        t = self.dataBuffer.get_time(timeOffset = -time.timezone +3600*time.daylight)
 
         if len(t) > 2:
             flowValueA = self.dataBuffer["flowValueA"]
@@ -178,23 +171,21 @@ class FlowControlFrame(tk.Frame):
         self.measureScaleB.set(flowPattern.measure.rateB)
 
     def on_resize(self, event):
-        self.plotCanvas.on_resize(self.master.winfo_width()-160, self.master.winfo_height())
-          
+        pass
+        self.plotCanvas.on_resize(self.winfo_width()-120, self.winfo_height()-15)
+
 
 if __name__ == "__main__":
 
-    calibration = configLoader.load_confDict("../config/flow.cal")["calibration"]
+    calibration = configLoader.load_confDict("../config/flow.cfg")["calibration"]
 
     import SerialDevices
-    deviceDict, portDict = SerialDevices.scan_serialPorts(9600)
-    if "IsWISaS_Controller" in deviceDict.keys():        
-        fc = SerialDevices.IsWISaS_Controller(deviceDict["IsWISaS_Controller"].port, deviceDict["IsWISaS_Controller"].baudRate, calibration)
-    else:
-        try:
-            fc = SerialDevices.SierraFlowController(COM_Port_FlowController, 9600)
-            print.fc.status
-        except:
-            fc = SerialDevices.FlowController("foobar", 0)
+    dInfo = SerialDevices.find_device("IsWISaS_Controller", [9600], cachePath = "../temp/serial.cch")   
+    try:
+        fc = SerialDevices.IsWISaS_Controller(dInfo["port"], dInfo["baudRate"], calibration)
+    except:
+        fc = SerialDevices.IsWISaS_Controller("foobar", 0)
+            
     root = tk.Tk()
     root.title("FlowController")
     root.geometry("%dx%d+%d+%d"%(1280,480,1,0))    

@@ -8,6 +8,7 @@ def string2Secs(string, formatString="%Y%m%d%H%M%S"):
         t = datetime.datetime.strptime(string, formatString)
     except:
         t = datetime.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
+    
     return(time.mktime(t.timetuple()))
 
 def secs2String(timestamp, formatString="%Y%m%d%H%M%S"):
@@ -38,8 +39,8 @@ def recursiveFileList(filepath, filterPattern=None):
     result = []
     for root, subdirs, files in os.walk(filepath):
         for f in files:
-            r = root.replace(filepath,"").replace("\\","/")[1:]
-            result.append(r+'/'+f)
+            r = root.replace(filepath,"").replace("\\","/")
+            result.append((r+'/'+f).lstrip('/'))    
 
     if filterPattern is None:
         return result
@@ -67,11 +68,5 @@ def reverse_dict(d):
     for key in d.keys():
         rev[d[key]] = key
     return rev
-    
-    
-        
-    
-    
-
     
     

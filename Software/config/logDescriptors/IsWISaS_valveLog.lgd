@@ -1,0 +1,31 @@
+#logDescriptor to parse the logfiles of a Picarro L1102-i, L2120-i or L2130-i
+
+######################################################################################
+#part1: define how to find the log files and how to interpret the time for each record
+# seperator can either be a char to sperate columns, empty (for white sace) or a numeric value (for fixed spacing)
+
+IsWISaS_1.0| logFilePattern   : valves.log
+IsWISaS_1.0| timeColumns      : timestamp
+IsWISaS_1.0| timeFormatString : %Y%m%d%H%M%S
+IsWISaS_1.0| skipLines        : 0
+IsWISaS_1.0| commentChar      : #
+IsWISaS_1.0| seperator        : \t
+IsWISaS_1.0| encoding         : utf-8
+
+########################################################################################
+#part2: define where (under which column name) to find the parameters of interest
+# the first line determines how they will be loaded into the the script
+# the second line defines the unit of the parameter
+# the follwoing lines should provide the corresponding column names in the respective log files
+
+# essentialColumns are a must
+|essentialColumns: timestamp;       ID
+|units           :     -    ;   activeValve 
+|IsWISaS_1.0     : timestamp;       ID
+-
+
+# optionalColumns could be missing
+|optionalColumns: measurement;  switchCode
+|units          :  yes or no ;  -
+|IsWISaS_1.0    : measurement;  switchCode
+-

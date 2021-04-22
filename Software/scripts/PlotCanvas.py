@@ -186,7 +186,7 @@ class PlotCanvas(tk.Canvas):
             self.create_rectangle(x1, y[0], x2, y[1], tags=tag, fill = color[i], width=width)
 
     def relativeLabel(self, xValue, relYValue, labelText, tag="extraLabel", color = "#aaa"):
-        self.delete(tag)
+        self.delete(tag)        
         if not type(xValue) == list:
             xValue = [xValue]
             relYValue = [relYValue]
@@ -197,7 +197,7 @@ class PlotCanvas(tk.Canvas):
             x = self.getX(xValue[i])
             self.create_text(x, y, text = labelText[i], tags = tag, fill = color)
 
-    def vertLines(self, xValues, labels=None, tag="vertLines", color="gray80", width=1, labelAnchor = tk.W, dash=None):
+    def vertLines(self, xValues, labels=None, tag="vertLines", color="gray80", width=1, labelAnchor = tk.W, dash=None):        
         self.delete(tag)
         y = [self.getY(self.plotRangeY[0]), self.getY(self.plotRangeY[1])]
 
@@ -208,9 +208,13 @@ class PlotCanvas(tk.Canvas):
             x = self.getX(xVal)
             self.create_line(x, y[0], x, y[1]-10, tags=tag, fill = color[i], width=width, dash = dash)
             if not labels is None:
-                self.create_text(x, y[1], text = labels[i], tags=tag, fill=color[i], anchor = labelAnchor)
+                self.create_text(x+2, y[1], text = labels[i], tags=tag, fill=color[i], anchor = labelAnchor)
 
-    def plotData(self, x, y, tag="data1", color="black", width=1, labelXoffset=0):
+    def plotData(self, x, y, tag="data1", color="black", width=1, labelXoffset=0, plotLumpSize = 1):
+
+        if plotLumpSize > 1 and len(x) > 100:
+            x = x[0::int(plotLumpSize)]
+            y = y[0::int(plotLumpSize)]
         
         self.draw_xAxis()
         self.draw_yAxis()
@@ -221,101 +225,17 @@ class PlotCanvas(tk.Canvas):
         if len(x) < 2 | len(y) < 2:
             return()
 
-        for i in range(2,len(x)):
+        for i in range(2,len(x)):            
             self.create_line(self.getX(x[i-1]), self.getY(y[i-1]), self.getX(x[i]), self.getY(y[i]), tags=tag, fill = color, width=width)
 
         if labelXoffset:
             self.create_text(self.getX(x[-1])-labelXoffset, self.getY(y[-1])-10,text = y[-1], fill = color, tags=tag)
 
-    def on_resize(self,width,height):
+    def on_resize(self, width, height):
         self.pxWidth = width
         self.pxHeight= height
         self.config(width=self.pxWidth, height=self.pxHeight)
 
-#============================================
-
-class LogFileOverviewCanvas(PlotCanvas):
-    def __init__(self, master, startTimes, stopTimes, valveTimes = None, loadHandler=None, selectionHandler=None, *args,**kwargs):
-        self.totalRange = [startTimes[0],stopTimes[-1]]
-        plotRangeX = self.totalRange
-        super(LogFileOverviewCanvas,self).__init__(master=master, plotRangeX = plotRangeX, plotRangeY=[0,4], marginX=0, marginY=15, axes=True, selectionHandler = selectionHandler, *args,**kwargs)
-        self.startTimes = startTimes
-        self.stopTimes = stopTimes
-        self.valveTimes = valveTimes        
-        self.loadHandler = loadHandler        
-        self.lastClickY = 0
-        self.periods = {}
-
-        if selectionHandler is None:
-            selectionHandler = self.change_selection
-        self.selectionHandler = selectionHandler
-        
-        self.draw_overviewRects()
-    
-    def draw_overviewRects(self):        
-        cols = ["#9f9","#7d7"]
-        self.delete("overview")
-
-        timeRange = self.plotRangeX[1]-self.plotRangeX[0]
-        timeFormat = "%Y"
-        if timeRange < 86400*365*2:
-            timeFormat = "%Y-%m"
-            if timeRange < 86400*365:
-                timeFormat = "%Y-%m-%d"
-                if timeRange < 86400 * 10:
-                    timeFormat = "%d.%m. %H:%M"
-        self.draw_xAxis(optimalTicks=10, timeFormat = timeFormat)
-
-        if not self.valveTimes is None:
-            y0 = self.getY(self.plotRangeY[1])-5
-            y1 = y0+5
-            for t in self.valveTimes:
-                self.create_line(self.getX(t), y0, self.getX(t), y1, tags="overview", fill = "#008", width=2)
-                    
-        for n in range(len(self.startTimes)):           
-            self.create_rectangle(self.getX(self.startTimes[n]),
-                                  self.getY(self.plotRangeY[0]),
-                                  self.getX(self.stopTimes[n]),
-                                  self.getY(self.plotRangeY[1]),
-                                  tags="overview", fill=cols[n%2], width=0)
-
-        #widths = [x["width"] for x in self.periods.values()]
-        for periodName in self.periods.keys():           
-            self.delete(periodName)
-            if self.periods[periodName]["period"] is None: continue
-            self.vertLines(self.periods[periodName]["period"], tag=periodName,
-                           width=self.periods[periodName]["width"],
-                           color=self.periods[periodName]["color"]) 
-
-    def set_period(self, period, name, linecolor, linewidth=2):        
-        self.periods[name] = {"period": period, "color": linecolor, "width": linewidth}        
-        self.delete(name)
-        self.vertLines(period, tag=name, color=linecolor, width= linewidth)        
-
-    def change_selection(self, selection=None, button="left"):
-
-        if button=="left":
-        
-            if selection is None:
-                selection = [self.startTimes[0], self.stopTimes[-1]]               
-
-            selection.sort()
-
-            intervalLength = selection[1] - selection[0]        
-            if (intervalLength) < 28800:                
-                m = (selection[0]+selection[1])/2
-                selection = [m - 14400, m+ 14400]
-                            
-            self.plotRangeX = selection.copy()
-            self.draw_overviewRects()
-
-        else:
-            self.loadHandler(selection)            
-
-    def on_resize(self,width,height):
-        super(LogFileOverviewCanvas,self).on_resize(width, height)
-        self.draw_overviewRects()
-        
-            
+#===========================================
             
         

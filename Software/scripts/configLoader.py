@@ -1,4 +1,5 @@
 import os
+import collections
 
 class FlowState():
     def __init__(self, rate, duration, rate_unit = "mL/min", duration_unit = "s"):
@@ -90,13 +91,14 @@ def combine(primaryPath, secondaryPath, keyList = []):
 
 def load_confDict(path, numericEntries = True, enforceList = []):
     print("Load", path, "...")
-    confDict = {}
-    f = open(path, 'r', encoding="UTF-8")
+    confDict = {"confFile": path}
+    f = open(path, 'r', encoding="utf-8")
     insideTable = False
     insideSubEntry = False
     currentSubEntryKey = ''
 
-    for line in f:        
+    for line in f:      
+        
         # skip comment lines and empty lines
         if line.startswith('#') or line == '\n': continue
         if line.startswith('-'):
@@ -136,13 +138,13 @@ def load_confDict(path, numericEntries = True, enforceList = []):
         # as table, those parts need some special treatment
         if key.startswith('|'):
             if not insideTable:                
-                tableDict = {}
-                confDict[key[1:]] = tableDict
+                tableDict = collections.OrderedDict()
+                confDict[key[1:].strip()] = tableDict
                 subKeys = entry
                 insideTable = True
             else:
-                tableLine = {}
-                tableDict[key[1:]] = tableLine
+                tableLine = collections.OrderedDict()
+                tableDict[key[1:].strip()] = tableLine
                 for i,subKey in enumerate(subKeys):
                     tableLine[subKey] = entry[i]
 
@@ -150,7 +152,7 @@ def load_confDict(path, numericEntries = True, enforceList = []):
         elif len(key.split('|'))>1:            
             splitKey = key.split('|')            
             if not insideSubEntry or not (currentSubEntryKey == splitKey[0]):                
-                subDict = {}
+                subDict = collections.OrderedDict()
                 confDict[splitKey[0]] = subDict
                 insideSubEntry = True
                 currentSubEntryKey = splitKey[0]
@@ -161,7 +163,7 @@ def load_confDict(path, numericEntries = True, enforceList = []):
             insideSubentry = False
             confDict[key] = entry
             
-    f.close()
+    f.close()   
 
     
     return(confDict)
@@ -188,7 +190,7 @@ def load_valveCfg(path = "../config/valve.cfg", flowDict=None):
 
     valveSequence = list(map(lambda x: int(x), rawValveDict["valveSequence"]))
 
-    valveDict = {}
+    valveDict = collections.OrderedDict()
 
     for key in rawValveDict["valve"].keys():
         valveInfo = rawValveDict["valve"][key]
@@ -215,7 +217,7 @@ def load_logCfg(path="../config/log.cfg"):
     
 
 def load_logConf(path="../config/log.cfg"):
-    conf = {}
+    conf = collections.OrderedDict()
     f = open(path, 'r')
     for line in f:
         if line.startswith('#'): continue        
@@ -236,7 +238,7 @@ def load_logConf(path="../config/log.cfg"):
             conf[key] = entry[0]
         else:
             if metaKey not in conf.keys():
-                conf[metaKey] = {}
+                conf[metaKey] = collections.OrderedDict()
             conf[metaKey][key] = entry
                 
     outCols = []

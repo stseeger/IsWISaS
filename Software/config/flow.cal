@@ -1,8 +1,0 @@
-#############################################
-#fc.cal                                     #
-#-------------------------------------------#
-# Calibration file for the flow controllers #
-#############################################
-|calibration : set_slope; set_intercept; get_slope; get_intercept
-|A           :       0.721;             0;       0.721;         0
-|B           :       0.178;             0;       0.178;         0

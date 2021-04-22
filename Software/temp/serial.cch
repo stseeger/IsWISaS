@@ -1,0 +1,1 @@
+{"devices": {"IsWISaS_Controller": {"port": "COM13", "baudRate": 9600, "name": "IsWISaS_Controller"}}, "ports": {"COM13": {"port": "COM13", "baudRate": 9600, "name": "IsWISaS_Controller"}}}

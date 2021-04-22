@@ -9,17 +9,18 @@ class Parameter():
     def __init__(self, name, unit, relevantDifference=0):
         self.name = name
         self.unit = unit
-        self.relevantDifference = relevantDifference
+        self.relevantDifference = relevantDifference       
 
     def __repr__(self):
         return "<DataBuffer.Parameter %s [%s]>"%(self.name,self.unit)
 
 class Buffer():
-    def __init__(self, length, filepath, parameters, flushChunk = 1, tag="buffer"):
+    def __init__(self, length, filepath, parameters, flushChunk = 1, tag="buffer", saveEvery = 1):
 
         # save creation parameters
         self.length = length
         self.filepath = filepath
+        self.saveEvery = saveEvery
 
         if not type(parameters) is list:
             parameters = [parameters]
@@ -35,16 +36,23 @@ class Buffer():
         
         # some internal variables
         self.currentRecord = 0
-        self.lastFlushRecord = 0      
+        self.lastFlushRecord = 0        
 
     def copy(self):
         return copy.deepcopy(self)        
 
     def add(self, newData, newTime = None):
-
         
         # update record buffer
         self.currentRecord+=1
+
+        # do not remember this step, if the record number is not
+        # a multiple of the safeEvery argument passed on initialization
+        # (it defaults to one, so that all added entries are actually saved)
+        #print(self.currentRecord, self.currentRecord%self.saveEvery)
+        if (self.currentRecord%self.saveEvery) > 0:
+            return
+        
         self.recordBuffer.append(self.currentRecord)
 
         # update time buffer
@@ -66,10 +74,13 @@ class Buffer():
         return [p.name for p in self.parameters] 
 
     # get entries from the time buffer (all or starting at startIndex)
-    def get_time(self, startIndex = None):
+    def get_time(self, startIndex = None, timeOffset=0):
         if startIndex is None: startIndex = 0
         if startIndex < 0: startIndex = len(self.dataBuffer)+startIndex
-        return list(itertools.islice(self.timeBuffer, startIndex, self.length))
+        if not timeOffset:
+            return list(itertools.islice(self.timeBuffer, startIndex, self.length))
+        else:
+            return [x+timeOffset for x in list(itertools.islice(self.timeBuffer, startIndex, self.length))]
 
     # get entries from the data buffer (all or starting at startIndex, or only for one specific parameter)
     def get_data(self, startIndex = None, parameter = None):
@@ -110,7 +121,7 @@ class Buffer():
         
         f = open(filepath,'a')
                 
-        line1 ="#[%Y%m%d%H%M%S]\t" + '\t'.join(["[%s]"%p.unit for p in self.parameters])
+        line1 ="#[%Y%m%d%H%M%S UTC]\t" + '\t'.join(["[%s]"%p.unit for p in self.parameters])
         line2 ="timestamp\t"     + '\t'.join([p.name for p in self.parameters])
         
         f.write(line1 + '\n' + line2 + '\n')
@@ -129,9 +140,7 @@ class Buffer():
                 print("create directory: " + fileDir)
                 os.makedirs(fileDir)                
             # create logfile and write a header
-            self.writeHeader(filepath)
-            
-        
+            self.writeHeader(filepath)                    
         
         f = open(filepath,'a')
 
@@ -184,8 +193,9 @@ class Buffer():
                 continue            
             
             format_time = time.strftime("%Y%m%d%H%M%S",time.gmtime(raw_time))
-            line = format_time + '\t'
-            line += '\t'.join(map(lambda x: str(x), self.dataBuffer[i]))
+            line = format_time + '\t'           
+            values = self.dataBuffer[i]
+            line += '\t'.join(map(lambda x: str(x), values))
             f.write(line+'\n')
 
         self.lastFlushRecord = self.currentRecord
