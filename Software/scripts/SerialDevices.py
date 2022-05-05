@@ -1,4 +1,7 @@
-import serial
+from site import venv
+
+
+import serial 
 import time
 import sys
 import glob
@@ -49,7 +52,7 @@ def scan_serialPorts(baudRate = [1200,9600], cachePath = None, refresh_cache = F
                 cache = json.load(infile)
             deviceDict = cache["devices"]
             portDict   = cache["ports"]
-            print("Loaded chached serial port scan results from "+ cachePath)
+            print("Cached serial port scan results are stored at: "+ cachePath)
             return deviceDict, portDict 
         except:
             pass            
@@ -176,9 +179,19 @@ class SerialDevice:
             if verbose: print("%s  will probably not work"%self.deviceType)
 
         return(self.status)
+
+
+
+
 #----------------------------------
 
 class IsWISaS_Controller(SerialDevice):
+
+    # Define class attributes so that mock is possible
+    maxFlowA = 0
+    maxFlowB = 0
+    box = 0
+    valve = 0
 
     def __init__(self, port, baudrate, flowCalibration = None):
         super(IsWISaS_Controller, self).__init__(port, baudrate, "IsWISaS_Controller")
@@ -278,12 +291,54 @@ class IsWISaS_Controller(SerialDevice):
         flowA = int((flowA+ fc["A"]["set_intercept"]) / fc["A"]["set_slope"])
         flowB = int((flowB+ fc["B"]["set_intercept"]) / fc["B"]["set_slope"])
 
+        if flowA > 255: flowA = 255
+        if flowB > 255: flowB = 255
+
         self.flowTargetA = flowA
         self.flowTargetB = flowB
 
         cmd = "flow %d %d\r"%(flowA, flowB)       
         self.serial.write(cmd.encode("utf-8"))
- 
+
+# ------ DUMMY
+
+class Mock_IsWISaS_Controller(IsWISaS_Controller):
+    
+    def __init__(self, port, baudrate, flowCalibration = None):
+        pass
+
+    def get_something(self, cmd, attempts=3, waitTime=500):
+        # return super().get_something(cmd, attempts, waitTime)
+        return None
+
+    def parse_valve(self, valve):
+        # return super().parse_valve(valve)
+        #print('RETURNING MOCK VALVE DATA: 0, 0')
+        return 0, 0 
+
+    def set_valve(self, valve, verbose=True):
+        # return super().set_valve(valve, verbose)
+        return
+
+    def get_valve(self):
+        # return super().get_valve()
+        pass
+
+    def set_flowCalibration(self, calibration=None):
+        # return super().set_flowCalibration(calibration)
+        pass
+
+    def get_flow(self, decimalPlaces=1):
+        # return super().get_flow(decimalPlaces)
+        print('!!! Check connection to IsWISaS_Controller!!!')
+        return [0,0]
+
+    def set_flow(self, flowA, flowB=0):
+        # return super().set_flow(flowA, flowB)
+        pass
+
+
+
 #------------------------------------------
 if __name__ == "__main__":
    
