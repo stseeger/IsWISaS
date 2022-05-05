@@ -243,7 +243,10 @@ class ValveControlFrame(tk.Frame):
     def valveButton_click(self, i):        
         clickID = list(self.sequ.probeDict.keys())[i]
         self.sequ.toggle(enabled=False)
-        self.sequ.switch_probe(clickID, switchCode = const.SWITCH_MANUAL)
+        if clickID == self.sequ.activeProbe.ID:
+            self.sequ.toggle_activeProbeMode(switchCode = const.SWITCH_MANUAL)
+        else:
+            self.sequ.switch_probe(clickID, switchCode = const.SWITCH_MANUAL)
 
     def sequenceButton_click(self, i):
 
@@ -299,7 +302,10 @@ class ValveControlFrame(tk.Frame):
             isActive = self.sequ.probeDict[probeID].isActive() and self.sequ.sequence[position].isActive()
 
             activeColor = colors[self.sequ.activeProbe.mode]
-            color = activeColor if position == self.sequ.position else colors["neutralButton"]
+            if position == self.sequ.position:
+                color = colors[self.sequ.activeProbe.mode] if self.sequ.isActive() else "#999"
+            else:
+                color = colors["neutralButton"]
 
             state = tk.NORMAL if isActive else tk.DISABLED
             fg = "#007" if self.sequ.isActive() else "#944"

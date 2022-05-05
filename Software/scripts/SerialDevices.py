@@ -234,10 +234,10 @@ class IsWISaS_Controller(SerialDevice):
     
     def set_valve(self, valve, verbose=True):
         if not self.status:
-            print(">> valve %s"%(valve))
+            print("\t>> valve %s"%(valve))
             return
 
-        print(">> valve %s"%(valve))
+        print("\t>> valve %s"%(valve))
         self.serial.write(("valve %s\r"%(valve)).encode("utf-8"))
 
     def get_valve(self):
@@ -281,7 +281,7 @@ class IsWISaS_Controller(SerialDevice):
             return response
 
     def set_flow(self, flowA, flowB = 0):
-        print(">> flow %d %d"%(flowA, flowB))
+        print("\t>> flow %d %d"%(flowA, flowB))
 
         if self.status == SerialDevice.NOT_CONNECTED:
             print("!! no serial connection to device !!")
