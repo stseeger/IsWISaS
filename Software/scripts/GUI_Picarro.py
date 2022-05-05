@@ -47,11 +47,11 @@ def summary(values):
     result["_min"] = min(values)
     result["_max"] = max(values)   
 
-    if all(value == 0 for value in values):
-        result["_precision"] = 0
-    else:
-        result["_precision"] = max(0,2-round(math.log(max(values)-min(values),10)))
-
+    result["_precision"] = 1
+    #if not all(value == 0 for value in values):
+    #    try:
+    #        result["_precision"] = 
+    #    except: pass
     return(result)
 
 
@@ -239,7 +239,7 @@ class PicarroFrame(tk.Frame):
 
         self.reader.update()        
         
-        t = self.reader.dataBuffer.get_time(timeOffset = (self.conf["picarroTimeOffset"]+time.daylight)*3600-time.timezone)
+        t = self.reader.dataBuffer.get_time(timeOffset = self.conf["picarroTimeOffset"]*3600-time.timezone)
 
         if not len(t):
             return
@@ -364,7 +364,7 @@ class PicarroFrame(tk.Frame):
             selectionInterval[0] = max(0, selectionInterval[0]-self.conf["evalSeconds"])            
 
         # get startIndex and length of the selected period
-        t = self.reader.dataBuffer.get_time(timeOffset = (self.conf["picarroTimeOffset"]+time.daylight)*3600-time.timezone)
+        t = self.reader.dataBuffer.get_time(timeOffset = self.conf["picarroTimeOffset"]*3600-time.timezone)
         for startIndex, startT in enumerate(t):
             if startT >= selectionInterval[0]:
                 break
@@ -412,7 +412,7 @@ class ValvePicarroFrame(PicarroFrame):
             super(ValvePicarroFrame,self).update()
             self.valveReader.update()
 
-            t = self.valveReader.dataBuffer.get_time(timeOffset = (self.conf["valveTimeOffset"]+time.daylight)*3600-time.timezone)
+            t = self.valveReader.dataBuffer.get_time(timeOffset = self.conf["valveTimeOffset"]*3600-time.timezone)
             v = self.valveReader.dataBuffer["ID"]            
 
             if not len(t):

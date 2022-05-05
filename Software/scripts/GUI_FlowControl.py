@@ -145,7 +145,7 @@ class FlowControlFrame(tk.Frame):
             
         self.dataBuffer.add(self.fc.get_flow(int(self.conf["decimalPlaces"])) + newTargets, time.time())
 
-        t = self.dataBuffer.get_time(timeOffset = -time.timezone +3600*time.daylight)
+        t = self.dataBuffer.get_time(timeOffset = -time.timezone)
 
         if len(t) > 2:
             flowValueA = self.dataBuffer["flowValueA"]

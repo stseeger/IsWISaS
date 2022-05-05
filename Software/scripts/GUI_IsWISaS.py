@@ -99,7 +99,7 @@ class ValveControlFrame(GUI_ValveControl.ValveControlFrame):
         except: return
 
         if propagate:
-            self.metaController.flow.toggle_mode(self.flowMode=="flush", propagate = False)
+            self.metaController.flow.toggle_mode(self.flowMode!="measure", propagate = False)
 
     def toggle_sequence(self, event=None):
         super(ValveControlFrame, self).toggle_sequence(event)
@@ -125,6 +125,13 @@ class ValveControlFrame(GUI_ValveControl.ValveControlFrame):
         self.metaController.flow.measureScaleA.set(x["mRateA"])
         self.metaController.flow.measureScaleB.set(x["mRateB"])
 
+    def get_coolDownTime(self, ID):
+        if ID == "":
+            return self.conf["autoSwitchCooldown"]
+        
+        return self.conf["ID"][ID]["distance"] * self.conf["autoSwitchCooldown"]/10
+        
+
     def measuredEnough(self):        
         original = super(ValveControlFrame, self).measuredEnough()
         self.switchCode = const.SWITCH_TIMEOUT
@@ -138,7 +145,7 @@ class ValveControlFrame(GUI_ValveControl.ValveControlFrame):
             return original
 
         a = self.picarroInfo["stable"]
-        b = self.conf["autoSwitchCooldown"] < self.currentDuration()
+        b = self.get_coolDownTime(self.activeID) < self.currentDuration()
 
         if a and b: self.switchCode = const.SWITCH_OPTIMUM
         return original or (a and b)
@@ -154,31 +161,45 @@ class ValveControlFrame(GUI_ValveControl.ValveControlFrame):
         if self.conf["autoSwitchEnable"] < 1 or self.picarroInfo is None:
             return original
 
-        a = self.picarroInfo["H2O"] < self.currentProbeProfile["flushTarget_H2O"]
-        b = self.conf["autoSwitchCooldown"] < self.currentDuration()
+        try:
+            a = self.picarroInfo["H2O"] < self.currentProbeProfile["flushTarget_H2O"]
+        except:
+            return original
+        b = self.get_coolDownTime(self.activeID) < self.currentDuration()
 
         if a and b: self.switchCode = const.SWITCH_OPTIMUM    
         return original or (a and b)
 
     def continueSequence(self, skip=False):
-        super(ValveControlFrame, self).continueSequence(skip)        
+        super(ValveControlFrame, self).continueSequence(skip,
+                                                        measure_after_flushTimeout=self.conf["autoSwitchEnable"] < 1)        
 
         try: H2O = self.picarroInfo["H2O"]
         except: return
         
-        duration = self.currentDuration()
+        duration = self.currentDuration()        
+        v1 = (H2O > self.conf["H2O_yellowAlert"]) and self.conf["autoSwitchEnable"] and (duration > 5)
+        v2 = (H2O > self.conf["H2O_redAlert"])    and self.conf["autoSwitchEnable"] and (duration > 5)
+        #t  = duration > self.conf["autoSwitchCooldown"]
 
-        v1 = (H2O > self.conf["H2O_yellowAlert"]) and self.conf["autoSwitchEnable"]
-        v2 = (H2O > self.conf["H2O_redAlert"])    and self.conf["autoSwitchEnable"]
-        t  = duration > self.conf["autoSwitchCooldown"]
+        activeProfile = self.conf["ID"][self.activeID]["profile"]        
 
-        if v2 or (v1 and t):
-            print("!!! Wetness alarm! Leaving valve " + self.activeID)
-            self.sequenceButton_click(self.get_nextValve(), True)
+        #if v1 and (activeProfile != "flush"):
+        #    print("!!! Wetness alarm! Leaving valve " + self.activeID)    
 
-        if v2 and t:
-            self.valveDict[self.activeID].stateVar.set(0)            
-            print("!!!          and disabling it")
+        if (v1 or v2) and (activeProfile != "flush"):
+            print("!!! Wetness alarm! Leaving valve " + self.activeID)    
+            print("    and disabling it (as well as its box)")            
+            for ID in self.valveDict.keys():
+                if ID.startswith(self.activeID[0]) and not (ID == self.conf["flushID"]):
+                    self.valveDict[ID].stateVar.set(0)
+
+        if (v2 or v1) and (activeProfile != "flush"):            
+            #self.open_valve(self.conf["flushID"], withinSequence=True)
+            self.valveButton_click(ID=self.conf["flushID"])
+            self.activeID = self.conf["flushID"]
+            self.set_probeProfile()    
+            #self.toggle_sequence()
     
 class FlowControlFrame(GUI_FlowControl.FlowControlFrame):
 

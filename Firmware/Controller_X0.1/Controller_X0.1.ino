@@ -1,4 +1,4 @@
-#include <Cmd.h>
+#include "src/CmdArduino/Cmd.h"
 
 #define DEVICE "IsWISaS_Controller"
 #define MODEL "X"
@@ -10,8 +10,8 @@ struct valveSlotType{
 };
 
 //------- valve control stuff ----------------
-#define VALVE_COUNT 16
-int valvePins[VALVE_COUNT] = {2,3,4,11,10,7,8,9,13,A0,A1,A2,A3,A4,A5};
+#define VALVE_COUNT 8
+int valvePins[VALVE_COUNT] = {9,8,7,10,11,4,3,2};
 
 valveSlotType primaryValve   = {0,9};
 valveSlotType secondaryValve = {0,0};
@@ -20,7 +20,7 @@ valveSlotType parse_valveSlot(char *arg){
   valveSlotType valveSlot;
   byte value;
   char *pch;
-  pch = strtok(arg,".");
+  pch = strtok(arg,"#");
   for(byte i=0; i<2; i++){
     if(pch == NULL) break;
     value =  atoi(pch);
@@ -32,7 +32,7 @@ valveSlotType parse_valveSlot(char *arg){
       valveSlot.box = valveSlot.slot;
       valveSlot.slot = value;
     }   
-    pch = strtok(NULL, ".");
+    pch = strtok(NULL, "#");
   }
   return valveSlot;
 }
@@ -47,12 +47,12 @@ void update_valves(){
 void get_activeValve(){
   Serial.print("valve>");
   Serial.print(primaryValve.box);
-  Serial.print('.');
+  Serial.print('#');
   Serial.print(primaryValve.slot);
   if(secondaryValve.slot){
     Serial.print("|");
     Serial.print(secondaryValve.box);
-    Serial.print('.');
+    Serial.print('#');
     Serial.print(secondaryValve.slot);    
   }
   Serial.println();

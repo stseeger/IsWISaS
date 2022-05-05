@@ -11,8 +11,8 @@
 char inputBuffer[INPUT_BUFFER_SIZE];
 
 #define VALVE_COUNT 16
-const int valvePins[VALVE_COUNT] = { 2,  3,  4,  5,  6,  7,  8,  9,
-                          A4, A5, A2, A1, A0, 12, 11, 10};
+//const int valvePins[VALVE_COUNT] = {10, 11, 12, A0, A1, A2, A5, A4, 9,  8,  7,  6,  5,  4,  3,  2};
+const int valvePins[VALVE_COUNT] = {2, 3, 4, 5, 6, 7, 8, 9, A4,  A5,  A2,  A1,  A0,  12,  11,  10};
 
 #define ID_PIN A3
 #define ANALOG_ID_TOLERANCE 7
@@ -139,6 +139,17 @@ void setup()
  
 void loop() 
 { 
-  RS485Poll();
-  update_valves();
+  if(get_id()<16){
+    RS485Poll();
+    update_valves();
+  }else{
+    for(byte n=0; n<16; n++){
+        for(byte i=0; i < VALVE_COUNT; i++){
+          digitalWrite(valvePins[i], i==n);
+      }
+      delay(400);
+      digitalWrite(valvePins[n], LOW);
+      delay(100);
+    }
+  }
 } 

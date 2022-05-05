@@ -14,7 +14,7 @@ SoftwareSerial RS485Serial(SSerialRX, SSerialTX); // RX, TX
 
 #define DEVICE "IsWISaS_Controller"
 #define MODEL "C"
-#define VERSION "0.1"
+#define VERSION "1.0"
 
 struct valveSlotType{
   byte box;
@@ -32,7 +32,7 @@ valveSlotType parse_valveSlot(char *arg){
   valveSlotType valveSlot;
   byte value;
   char *pch;
-  pch = strtok(arg,".");
+  pch = strtok(arg,"#");
   for(byte i=0; i<2; i++){
     if(pch == NULL) break;
     value =  atoi(pch);
@@ -44,7 +44,7 @@ valveSlotType parse_valveSlot(char *arg){
       valveSlot.box = valveSlot.slot;
       valveSlot.slot = value;
     }   
-    pch = strtok(NULL, ".");
+    pch = strtok(NULL, "#");
   }
   return valveSlot;
 }
@@ -59,12 +59,12 @@ void update_valves(){
 void get_activeValve(){
   Serial.print("valve>");
   Serial.print(primaryValve.box);
-  Serial.print('.');
+  Serial.print('#');
   Serial.print(primaryValve.slot);
   if(secondaryValve.slot){
     Serial.print("|");
     Serial.print(secondaryValve.box);
-    Serial.print('.');
+    Serial.print('#');
     Serial.print(secondaryValve.slot);    
   }
   Serial.println();
@@ -166,7 +166,7 @@ void cmd_flow(int arg_cnt, char **args){
 void cmd_test(int arg_cnt, char **args){
    valveSlotType x = parse_valveSlot(args[1]);
    Serial.print(x.box);
-   Serial.print(".");
+   Serial.print("#");
    Serial.print(x.slot);
 }
 

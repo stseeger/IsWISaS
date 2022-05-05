@@ -32,7 +32,7 @@ class Task():
         self.minute = float(timeString[1])
 
     def timeTillNext(self):
-        now = datetime.datetime.now() + datetime.timedelta(seconds = time.timezone - 3600 * time.daylight)
+        now = datetime.datetime.now()
 
         if self.weekday is None:
             d = 0

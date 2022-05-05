@@ -26,7 +26,7 @@ class ExtendedFileHandle():
         self.columnsOfTimeAndData = columnsOfTimeAndData
 
 class Reader():
-    def __init__(self, configFile, logDir, logScheme = '?', bufferSize = 4000, startTimeFromFilepathFun = None):
+    def __init__(self, configFile, logDir, logScheme = '?', bufferSize = 4000, startTimeFromFilepathFun = None, fillBuffer=True):
         self.logDir = logDir
         conf = configLoader.load_confDict(configFile)        
         
@@ -51,9 +51,10 @@ class Reader():
 
         self.startTimeFromFilepathFun = startTimeFromFilepathFun
 
-        sys.stdout.write("Filling data buffer...")
-        self.fill_dataBuffer()
-        sys.stdout.write("done!\n")
+        if(fillBuffer):
+            sys.stdout.write("Filling data buffer...")
+            self.fill_dataBuffer()
+            sys.stdout.write("done!\n")
 
     def list_logFiles(self, pattern = None, logDir = None):
         """
@@ -419,15 +420,15 @@ class Reader():
             
 if __name__ == "__main__":
 
-    configFile = "../config/logDescriptors/IsWISaS_valveLog.lgd"
-    t = Reader(configFile, "../log")
+    #configFile = "../config/logDescriptors/IsWISaS_valveLog.lgd"
+    #t = Reader(configFile, "../log")
 
-    print(t.dataBuffer.get_time())
+    #print(t.dataBuffer.get_time())
 
-    #configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
-    #logDir = "../exampleLogs/1102"
+    configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
+    logDir = "C:/UserData/DataLog_User"
     #logDir = "../exampleLogs/2120"
     #logDir = "../../../picarroLogs/fake"
     
-    #s = Reader(configFile, logDir, "?")    
+    s = Reader(configFile, logDir, "?")    
             

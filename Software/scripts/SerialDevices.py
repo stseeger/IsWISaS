@@ -114,15 +114,17 @@ class SerialDevice:
             self.serial.open()
             self.status = SerialDevice.CONNECTED
             sys.stdout.write("   %s (%d bauds) "%(port,baudrate))
-            if(deviceType=="SerialDevice"):
+            if(deviceType=="SerialDevice"):                
                
                 for attempt in range(3):                                                        
                     deviceMessage = self.identify()
                     if len(deviceMessage) > 2:
                         break
-                    time.sleep(0.1)
+                    time.sleep(0.1)                
                 
-                if len(deviceMessage) >= 3 and deviceMessage[0] == "?":                        
+                if len(deviceMessage) >= 3 and (deviceMessage[0] == "?" or deviceMessage[1]== "?"):                        
+                        if deviceMessage[1]== "?":
+                            deviceMessage = deviceMessage[1:]
                         deviceInfo = deviceMessage[1].split(' ')                        
                         self.deviceType = deviceInfo[0]
                         self.deviceModel = deviceInfo[1]
@@ -203,23 +205,27 @@ class IsWISaS_Controller(SerialDevice):
         return None
 
     # ------- valve section -----------------
-    def set_valve(self, valve, verbose=True):
-        if not self.status: return
+    def parse_valve(self,valve):
+
+        enries = valve.split(' ')
 
         try:
             splitValve = valve.split("#")
             box   = int(splitValve[0])
             valve = int(splitValve[1])
-            print(">> valve %d#%d"%(box,valve))
-            self.serial.write(("valve %d#%d\r"%(box,valve)).encode("utf-8"))
-            self.box = box
-            self.valve = valve
         except:
+            box = 0
             valve = int(valve)
-            print(">> valve %d"%(valve))
-            self.serial.write(("valve %d\r"%(valve)).encode("utf-8"))
-            self.box = 0
-            self.valve = valve
+        return box, valve
+
+    
+    def set_valve(self, valve, verbose=True):
+        if not self.status:
+            print(">> valve %s"%(valve))
+            return
+
+        print(">> valve %s"%(valve))
+        self.serial.write(("valve %s\r"%(valve)).encode("utf-8"))
 
     def get_valve(self):
         response = self.get_something("valve")

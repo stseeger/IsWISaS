@@ -6,7 +6,6 @@ import time
 import os
 import math
 import collections
-import gc
 
 import PlotCanvas
 import ExtraWidgets
@@ -29,8 +28,8 @@ def check_valveCfg(cfg):
         if not "state" in cfg["ID"][ID].keys():
             cfg["ID"][ID]["state"] = 1
 
-    if not "sequence" in cfg.keys():            
-        cfg["sequence"] = [cfg["ID"][key]["name"] for key in cfg["valve"].keys()]
+    if not "sequence" in cfg.keys():        
+        cfg["sequence"] = list(cfg['ID'].keys())
     else:
         sequence = []
         for item in cfg["sequence"]:
@@ -47,7 +46,7 @@ def check_valveCfg(cfg):
     return cfg
 
 class Valve():
-    def __init__(self, ID, slot, probeType, button, stateVar, group="A"):
+    def __init__(self, ID, slot, probeType, button, state, group="0#0"):
 
         self.ID = ID
 
@@ -60,8 +59,8 @@ class Valve():
             self.slot =int(slot)
 
         self.probeType = probeType
-        self.button = button        
-        self.stateVar = stateVar        
+        self.button = button       
+        self.state = [state, state]        
         self.group = group
 
         toolTip = ExtraWidgets.ToolTip(button, text = "%s (%s)\n"%(ID,probeType)+
@@ -86,11 +85,12 @@ class ValveControlFrame(tk.Frame):
         
         self.switchCode = const.SWITCH_START
 
-        self.activeID = ""
-        self.sequencePosition = -1
-        self.flowMode = "measure"
-        self.sequMode = "inactive"
-        self.startTime = 0 
+        self.activeID         = ["none","none"]
+        self.sequencePosition = [-1, -1]
+        self.sequenceMode     = ["inactive", "inactive"]
+        self.startTime        = [0, 0]
+        
+        self.flowMode = "flush"        
 
         self.conf = check_valveCfg(configLoader.load_confDict(valveConfigFile))
 
@@ -103,6 +103,11 @@ class ValveControlFrame(tk.Frame):
                                                                             const.SWITCH_OPTIMUM, const.SWITCH_ALERT))
         
         self.valveBuffer = DataBuffer.Buffer(100, self.conf["logFile"], parameters = [parActiveValve, parMeasurement, parSwitchCode])
+
+        #-------------------
+        self.controlKeyDown = False
+        self.bind_all("<KeyPress-Control_L>", self.press_controlKey)
+        self.bind_all("<KeyRelease-Control_L>", self.release_controlKey)
 
         #--------------------------------------------------------------
         if not vc.check_status():
@@ -226,7 +231,10 @@ class ValveControlFrame(tk.Frame):
         self.set_probeProfile()
 
         self._job = None
-        self.sequencePaused = False        
+        self.sequencePaused = False
+
+        self.activeID[0] = self.conf["sequence"][0]
+        self.activeID[1] = "none"
 
         print("Giving the valve controller some time...")
         self.after(2500, self.startup)
@@ -236,69 +244,68 @@ class ValveControlFrame(tk.Frame):
         # open first valve
         
         for ID in self.valveDict.keys():            
-            self.valveDict[ID].stateVar = self.conf["ID"][ID]["state"] > 0
+            self.valveDict[ID].state[0] = self.conf["ID"][ID]["state"] > 0
+            self.valveDict[ID].state[1] = self.conf["ID"][ID]["state"] > 0
 
         self.update_valveButtons()
 
         if "initialID" in self.conf.keys():
-            self.sequencePosition = -0            
+            self.sequencePosition[0] = -0            
             for i, ID in enumerate(self.valveDict.keys()):
                 if self.conf["initialID"] == ID:
-                    self.activeID = ID
+                    self.activeID[0] = ID
                     self.valveButton_click(i)
                     break
 
             self.switchCode = const.SWITCH_MANUAL
             
         else:            
-            self.sequencePosition = -1
+            self.sequencePosition[0] = -1
             i = self.get_nextValve()
             self.toggle_sequence()
-            self.sequenceButton_click(i, withinSequence=True)
+            self.sequenceButton_click(i)
             self.switchCode = const.SWITCH_TIMEOUT
            
         self.set_probeProfile()
+        self.flowMode = "flush"
         self.update_progressBars()
         self.update_valveButtons()
 
     #---------------------------------------------   
     def fill_buttonFrame(self):
 
-        for button in self.buttonFrame.grid_slaves():            
-            button.destroy()       
+        for button in self.buttonFrame.grid_slaves():
+            button.destroy()
 
         valveDict = collections.OrderedDict()        
 
         N = len(self.conf["ID"].keys())
         columnCount = math.ceil(N/MAX_VALVES_PER_COLUMN)
         rowCount = math.ceil(N/columnCount)
-
+        
         
         for i, ID in enumerate(self.conf["ID"].keys()):
             button = tk.Button(self.buttonFrame, command = lambda j = i: self.valveButton_click(j),
                                font = tkFont.Font(family="Sans", size=9, weight="bold"), state = tk.DISABLED,
                                text = ID, bg=colors["group_"+self.conf["ID"][ID]["group"]], disabledforeground="#866")
             button.bind('<Button-3>', self.rightClick)
-
-
-            stateVar = True          
                         
             valveDict[ID] = Valve(ID, self.conf["ID"][ID]["slot"],
                                       self.conf["ID"][ID]["profile"],
-                                      button, stateVar, self.conf["ID"][ID]["group"])
+                                      button, True, self.conf["ID"][ID]["group"])
 
             row = math.floor(i/columnCount)
             column = i-math.floor(row*columnCount)
             valveDict[ID].grid(row = row, column=column)
             self.buttonFrame.rowconfigure(row, weight=1)
-            self.buttonFrame.columnconfigure(column, weight=1)        
+            self.buttonFrame.columnconfigure(column, weight=1)
 
         return valveDict
 
     #---------------------------------------------
     def fill_sequenceButtonFrame(self):
 
-        for button in self.sequenceButtonFrame.grid_slaves():            
+        for button in self.sequenceButtonFrame.grid_slaves():
             button.destroy()
 
         valveSequence = []
@@ -306,20 +313,18 @@ class ValveControlFrame(tk.Frame):
         N = len(self.conf["sequence"])
         columnCount = math.ceil(N/MAX_VALVES_PER_COLUMN)
         rowCount = math.ceil(N/columnCount)
-
         
         for i, ID in enumerate(self.conf["sequence"]):           
 
             button = (tk.Button(self.sequenceButtonFrame, command = lambda j = i: self.sequenceButton_click(j),
                                 font = tkFont.Font(family="Sans", size=9, weight="bold"), state = tk.DISABLED,
                                 text = ID, bg = colors["group_"+self.conf["ID"][ID]["group"]]))
-            button.bind('<Button-3>', self.rightClick)
+            button.bind('<Button-3>', self.rightClick)            
 
-            stateVar = True
             
             valveSequence.append(Valve(ID, self.conf["ID"][ID]["slot"],
                                            self.conf["ID"][ID]["profile"],
-                                           button, stateVar, self.conf["ID"][ID]["group"]))
+                                           button, True, self.conf["ID"][ID]["group"]))
 
             row = math.floor(i/columnCount)
             column = i-math.floor(row*columnCount)
@@ -339,7 +344,7 @@ class ValveControlFrame(tk.Frame):
 
     def refresh_configuration(self):
 
-        activeSlot = self.conf["ID"][self.activeID]["slot"]        
+        activeSlot = self.conf["ID"][self.activeID[0]]["slot"]        
         
         self.conf = check_valveCfg(configLoader.load_confDict(self.conf["confFile"]))
 
@@ -350,39 +355,42 @@ class ValveControlFrame(tk.Frame):
         # these lines take care of cases where the previously active slot has been given to a new ID
         for ID in self.valveDict.keys():       
             if '%d#%d'%(self.valveDict[ID].box,self.valveDict[ID].slot) == activeSlot:
-                self.activeID = ID
-            self.valveDict[ID].stateVar = self.conf["ID"][ID]["state"] > 0
+                self.activeID[0] = ID
+            self.valveDict[ID].stateVar.set(int(self.conf["ID"][ID]["state"] > 0))       
 
         self.update_valveButtons()
 
 
+    def press_controlKey(self, event):
+        self.controlKeyDown = True
+        self.update_valveButtons()
+
+    def release_controlKey(self, event):
+        self.controlKeyDown = False
+        self.update_valveButtons()
+
     def rightClick(self, event):
 
-        origin = str(event.widget).split('.')[-2:]        
-
+        origin = str(event.widget).split('.')[-2:]
         origin[0] = origin[0].replace("!frame","")
+        frame = "valves" if not len(origin[0]) else "sequence"        
 
-        if not len(origin[0]):
-            frame = "valves"
-            offset = str(self.buttonFrame.winfo_children()[0]).split('.')[-1]            
-        else:
-            frame = "sequence"
-            offset = str(self.sequenceButtonFrame.winfo_children()[0]).split('.')[-1]
-                
         origin[1] = origin[1].replace("!button","")
         index = 0 if not len(origin[1]) else int(origin[1])-1
 
-        offset = offset.replace("!button","")
-        offset = 0 if not len(offset) else int(offset)-1
-
-        index = index - offset
-
         ID = list(self.valveDict.keys())[index]
+
+        i = self.controlKeyDown
+        print(i)
         
-        if frame == "valves":           
-            self.valveDict[ID].stateVar = not self.valveDict[ID].stateVar
+        if frame == "valves":
+            self.valveDict[ID].state[i] = not self.valveDict[ID].state[i]
         else:
-            self.valveSequence[index].stateVar = not self.valveSequence[index].stateVar
+            self.valveSequence[index].state[i] = not self.valveSequence[index].state[i]
+
+        if not i:
+            self.valveDict[ID].state[1] = self.valveDict[ID].state[0]
+            self.valveSequence[index].state[1] = self.valveSequence[index].state[0]
 
         self.update_valveButtons()
 
@@ -392,7 +400,7 @@ class ValveControlFrame(tk.Frame):
     def set_probeProfile(self, ID=None):
 
         if ID is None:
-            ID = self.activeID
+            ID = self.activeID[0]
            
         if ID in self.conf["ID"].keys():
             try:
@@ -415,19 +423,18 @@ class ValveControlFrame(tk.Frame):
 
     def toggle_flowMode(self, newMode=None):
         if newMode is None:
-            newMode = ["measure","flush"] [self.flowMode=="measure"]
+            newMode = ["flush","measure"] [self.flowMode!="measure"]
 
         change =  not self.flowMode == newMode       
 
         self.flowMode = newMode
         
-        self.valveBuffer.add([self.activeID, [0,1][self.flowMode=="measure"], self.switchCode])
+        self.valveBuffer.add([self.activeID[0], {"flush":0, "measure":1, "postFlush":2}[self.flowMode], self.switchCode])
 
-        self.switchCode = const.SWITCH_MANUAL if self.sequMode == "inactive" else const.SWITCH_TIMEOUT
+        self.switchCode = const.SWITCH_MANUAL if self.sequenceMode[0] == "inactive" else const.SWITCH_TIMEOUT
 
-        if change:            
-            if newMode == "flush":
-                self.startTime = time.time()
+        if change:                        
+            self.startTime[0] = time.time()
 
         self.update_valveButtons()
 
@@ -437,13 +444,13 @@ class ValveControlFrame(tk.Frame):
             self.after_cancel(self._job)
             self._job = None
 
-        if not self.sequMode == "active":
-            self.sequMode = "active"
+        if not self.sequenceMode[0] == "active":
+            self.sequenceMode[0] = "active"
             self.sequenceButton.config(image=self._sequenceButtonImages[1], text="stop\nsequence")
             self._job = self.after(10, self.continueSequence)
-            self.startTime = time.time()
+            self.startTime[0] = time.time()
         else:
-            self.sequMode = "inactive"
+            self.sequenceMode[0] = "inactive"
             self.sequenceButton.config(image=self._sequenceButtonImages[0], text="start\nsequence")
 
         print("---toggle sequence---")
@@ -451,99 +458,144 @@ class ValveControlFrame(tk.Frame):
         self.update_progressBars()
 
 
-    def currentDuration(self):
-        return time.time()-self.startTime + 0.0001
+    def currentDuration(self, secondary=False):
+        return time.time()-self.startTime[secondary] + 0.0001
 
-    def flushedEnough(self):        
-        return self.currentDuration() >= self.currentProbeProfile["fDuration"]
+    def flushTimeout(self, secondary=False):
+        return self.currentDuration(secondary) >= self.currentProbeProfile["fDuration"]
+
+    def altFlushedEnough(self):
+        return self.flushTimeout(secondary=True)
+
+    def flushedEnough(self):
+        return self.flushTimeout(secondary=False)
 
     def measuredEnough(self):
-        return self.currentDuration() >= self.currentProbeProfile["mDuration"]
+        return self.currentDuration(secondary=False) >= self.currentProbeProfile["mDuration"]
 
 
-    def get_nextValve(self):
-        remainingPart = list(range(self.sequencePosition+1, len(self.valveSequence)))
-        passedPart = list(range(0, self.sequencePosition)) + [self.sequencePosition]        
+    def get_nextValve(self, returnID=False, secondary = False):
+
+        sequencePos = self.sequencePosition[secondary]
+        
+        remainingPart = list(range(sequencePos+1, len(self.valveSequence)))
+        passedPart = list(range(0, sequencePos)) + [sequencePos]        
         for nextPos in (remainingPart + passedPart):            
             ID = self.valveSequence[nextPos].ID
-            baseValveState = self.valveDict[ID].stateVar.get()            
+
+            if not secondary:
+                viable = self.valveSequence[nextPos].state[0] and self.valveDict[ID].state[0]
+            else:
+                viable = self.valveSequence[nextPos].state[1] and self.valveDict[ID].state[1] \
+                         and self.valveDict[ID].group != self.valveDict[self.activeID[0]].group
             
-            if self.valveSequence[nextPos].stateVar.get() and baseValveState:
+            if viable:
                 break
-        return nextPos
 
-    def continueSequence(self, skip=False):
-
-        nowTime = time.time()
-
-        if self.flowMode == "flush" and self.flushedEnough():
-            self.toggle_flowMode()            
-            self.startTime = time.time()            
-
-        if (self.flowMode == "measure" and self.measuredEnough()) or skip:
-            self.sequenceButton_click(self.get_nextValve(), True)
-
-        if skip:
-            self.startTime = time.time()
+        if returnID:
+            return self.valveSequence[nextPos].ID
         else:
-            self._job = self.after(500, self.continueSequence)
-            self.update_progressBars(self.currentDuration())      
+            return nextPos
+
+    def continueSequence(self, skip=False, measure_after_flushTimeout=True):
+
+        if (self.flowMode == "measure" and self.measuredEnough()):            
+            postFlush = self.valveDict[self.activeID[0]].box != self.valveDict[self.get_nextValve(returnID=True)].box          
+            if postFlush and self.conf["postFlushEnable"]:                
+                self.toggle_flowMode("postFlush")
+            else:
+                skip = True
+
+        if (self.flowMode in ["flush", "postFlush"]) and self.flushedEnough():            
+            if self.flowMode == "flush" and (not self.flushTimeout() or measure_after_flushTimeout):
+                self.toggle_flowMode("measure")            
+            else:
+                skip = True
+
+        if skip:            
+            self.primaryStartTime = time.time()
+            self.sequenceButton_click(self.get_nextValve(), True)
+                    
+        self._job = self.after(500, self.continueSequence)
+        self.update_progressBars(self.currentDuration())      
         
 
-    def sequenceButton_click(self, sequencePos, withinSequence=False):
-        noChange = self.sequencePosition==sequencePos
-        self.sequencePosition = sequencePos        
-        self.activeID = self.valveSequence[sequencePos].ID
-        self.open_valve(self.activeID, noChange, withinSequence)
+    def sequenceButton_click(self, sequencePos, withinSequence = True):
 
-    def valveButton_click(self, position):
-        sequencePos = -1 # clicking directly on a valve button discards the current position within the sequence
+        if not self.controlKeyDown:            
+            self.update_valves(primary   = self.valveSequence[sequencePos].ID)            
+            self.sequencePosition[0] = sequencePos
+        else:            
+            self.update_valves(secondary = self.valveSequence[sequencePos].ID)            
+            self.sequencePosition[1] = sequencePos        
 
-        ID = list(self.valveDict.keys())[position]
-        
-        noChange = self.activeID == ID and self.sequencePosition == sequencePos
-        self.activeID = ID
-        self.sequencePosition = sequencePos        
-        self.open_valve(ID, noChange)
+        self.update_valves()
+
+    def valveButton_click(self, position=1, ID=None):
+
+        # clicking directly on a valve button discards the current position within the sequence
+        if ID is None:
+             ID = list(self.valveDict.keys())[position]  
+
+        if not self.controlKeyDown:                                      
+            self.update_valves(primary = ID)
+            self.sequencePosition[0] = -1
+        else:
+            self.update_valves(secondary = ID)
+            self.sequencePosition[1] = -1        
 
 
-    def update_valveButtons(self):
+    def update_valveButtons(self):       
 
-        buttonColors = [colors["neutralButton"], colors[self.flowMode]]
-        
+        buttonColors = [colors["neutralButton"], colors[self.flowMode]]        
         masterButtonList = [self.valveDict[ID] for ID in self.valveDict.keys()]
+        activeGroup = self.valveDict[self.activeID[0]].group       
         
         for n, buttonList in enumerate([masterButtonList, self.valveSequence]):            
             for i, button in enumerate(buttonList):
 
-                buttonColors[0] = colors["group_"+button.group]
+                if not self.controlKeyDown and not button.ID == self.activeID[1]:
+                    buttonColors[0] = colors["group_"+button.group]
+                    if n and i==self.sequencePosition[1]:
+                        buttonColors[0] = colors["altGroup_"+button.group]                        
+                    textCol = "#000"
+                    textCol2 = "#555"                    
+                else:
+                    buttonColors[0] = colors["altGroup_"+button.group]
+                    textCol="#fff"
+                    textCol2 = "#999"
+
+
+                cfd = self.controlKeyDown
                 
-                index = [button.ID == self.activeID, i==self.sequencePosition][n]
+                index = [button.ID == self.activeID[cfd], i==self.sequencePosition[cfd]][n]
                 
                 newCol = buttonColors[index]
-
-                if button.button['bg'] != newCol:
-                    button.button.config(bg=newCol, relief = [tk.RAISED, tk.GROOVE][index])                
+                
+                button.button.config(bg=newCol, fg=textCol, disabledforeground=textCol2, relief = [tk.RAISED, tk.GROOVE][index])
                 
                 # deactivate button on the valveSequence level, when the corresponding valve button
                 # has been deactivated
                 if n == 1:                    
-                    baseValveState = self.valveDict[button.ID].stateVar                
+                    baseValveState = self.valveDict[button.ID].state[cfd]
                 else:
-                    baseValveState = True               
+                    baseValveState = True
 
-                button.button.config(state = [tk.DISABLED, tk.NORMAL][baseValveState and button.stateVar])                
+                # 
+                noDoubleOpening = not self.controlKeyDown or (activeGroup != button.group)
+
+                button.button.config(state = [tk.DISABLED, tk.NORMAL][baseValveState and button.state[cfd] and noDoubleOpening])                
 
     def update_progressBars(self,duration=0):
-
-
         flushDuration = self.currentProbeProfile["fDuration"]        
         measureDuration = self.currentProbeProfile["mDuration"]        
 
-        if duration:           
-            self.progBars[self.flowMode]["bar"].configure(value=duration)
-            maxDuration = self.currentProbeProfile[["mDuration","fDuration"][self.flowMode=="flush"]]
-            self.progBars[self.flowMode]["label"].configure(text = "%.0f/%.0f"%(duration,maxDuration))
+        if duration:
+            flowMode = ["measure","flush"][self.flowMode!="measure"]
+            
+            self.progBars[flowMode]["bar"].configure(value=duration)
+            maxDuration = self.currentProbeProfile[["mDuration","fDuration"][flowMode=="flush"]]
+            self.progBars[flowMode]["label"].configure(text = "%.0f/%.0f"%(duration,maxDuration))
         else:            
             self.master.update()
             w = self.master.winfo_width()
@@ -553,24 +605,59 @@ class ValveControlFrame(tk.Frame):
                 self.progBars[flowMode]["bar"].configure(value=0, max=maxDuration, length=length)
                 self.progBars[flowMode]["label"].configure(text = "%.0f/%.0f"%(duration,maxDuration))
 
-    def open_valve(self, ID, noChange=False, withinSequence=False):
+    def update_valves(self, primary = None, secondary = None):
 
-        if self.sequMode == "active" and not withinSequence:
+        if self.activeID[1] == "none":
+            self.sequencePosition[1] = -1
+
+        #if self.primarySequenceMode == "active" and not withinSequence:
+        if not primary is None and self.sequenceMode[0] == "active":
             self.toggle_sequence()
 
-        if noChange:
-            self.toggle_flowMode()            
-            
+
+        if primary is None:
+            primary = self.activeID[0]
+        elif primary == self.activeID[0]:
+            self.toggle_flowMode()
         else:
-            print("------------------\nactive probe: "+ ID)
-            self.vc.set_valve("%d#%d"%(self.valveDict[ID].box,self.valveDict[ID].slot))
-            self.set_probeProfile(ID)
+            print("------------------\nprimary probe: "+ primary)
+            self.set_probeProfile(primary)
             self.toggle_flowMode("flush")
+            
+        
+        if secondary is None:
+            secondary = self.activeID[1]
+        else:
+            if secondary == self.activeID[1]:
+                secondary = "none"            
+
+        self.activeID[0] = primary
+        self.activeID[1] = secondary
+        group = self.valveDict[primary]
+
+        if not secondary == "none" and self.valveDict[primary].group == self.valveDict[secondary].group:
+            newSecondary = self.get_nextValve(returnID=True, secondary = True)
+            self.sequencePosition[1] = self.get_nextValve(secondary = True)
+
+            self.activeID[1] = newSecondary
+            secondary = newSecondary
+
+        print("----------------\nsecondary probe: "+ secondary)
+            
+
+        primaryValve = self.valveDict[primary]
+        primaryValve = "%d#%d"%(primaryValve.box, primaryValve.slot)
+
+        try:
+            secondaryValve  = self.valveDict[secondary]
+            secondaryValve = "%d#%d"%(secondaryValve.box, secondaryValve.slot)
+        except:
+            secondaryValve = "0#0"
+            
+        self.vc.set_valve(" ".join([primaryValve, secondaryValve, self.valveDict[primary].group]))
             
         self.update_valveButtons()
         self.update_progressBars()
-
-        return
 
 
 if __name__ == "__main__":
