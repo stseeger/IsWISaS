@@ -1,3 +1,5 @@
 Software/log/
 Software/scripts/__pycache__/
 Software/temp/
+*.pyc
+*.pyc
