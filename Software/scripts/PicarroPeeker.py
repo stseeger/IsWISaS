@@ -4,7 +4,7 @@ import datetime
 import time
 #import rdp
 
-timeWindow_in_hours = 1
+timeWindow_in_hours = 24
 
 configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
 logDir = "C:/UserData/DataLog_User" 
@@ -32,7 +32,7 @@ lastTime = None
 timeSpan = 0
 
 while timeSpan < timeWindow_in_hours*3600:
-    print("process \"%s\""%logFiles[fileIndex])
+    print("process %d \"%s\""%(fileIndex,logFiles[fileIndex]))
     with open(logDir+'/'+logFiles[fileIndex]) as f:
 
         times = []
@@ -68,13 +68,18 @@ while timeSpan < timeWindow_in_hours*3600:
             except:
                 pass
 
-    timeSpan = valPairs[-1][0] - valPairs[0][0]
+    full_valPairs = valPairs + full_valPairs
+
+    timeSpan = full_valPairs[-1][0] - full_valPairs[0][0]   
+    
+    #if(fileIndex==236): break
+
     fileIndex-=1
 
 # use Ramer-Douglas-Peucker algorithm to simplify the time series
 #print("original # of data points:",len(full_valPairs))
 #print("reduce number of data points...")
-simple = valPairs#rdp.rdp(full_valPairs, epsilon=50)
+simple = full_valPairs#rdp.rdp(full_valPairs, epsilon=50)
 #print("reduced # of data points:",len(simple))
 
 baseTime = 0#full_valPairs[0][0]

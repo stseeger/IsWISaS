@@ -8,8 +8,9 @@ import PlotCanvas
 import DataBuffer
 import configLoader
 
-colors = configLoader.load_confDict("../config/default/colors.cfg")
-
+colors = configLoader.load_confDict("../config/default/colors.cfg",
+                                    verbose = __name__=="__main__")
+  
 class FlowControlFrame(tk.Frame):
     def __init__(self, master, fc, flowConfigFile="../config/flow.cfg", *args, **kwargs):
         super(FlowControlFrame,self).__init__(master,*args, **kwargs)
@@ -20,13 +21,9 @@ class FlowControlFrame(tk.Frame):
         self.master.grid_columnconfigure(0, weight=1)
         self.master.grid_rowconfigure(0, weight=1)
 
-        self.isFlushing = True
-        self.isCycling = False
-        self.cycleStartTime = time.time()
         self.job = None
 
         self.conf = configLoader.load_confDict(flowConfigFile)        
-        self.profiles = [self.conf["profile"][key] for key in self.conf["profile"].keys()]
 
         if not self.conf["logfile"]:
             logfilePath = None
@@ -60,31 +57,15 @@ class FlowControlFrame(tk.Frame):
         tk.Label(self.leftFrame, text="A", font = self.font, bg = colors["fcA"]).grid(row=1,column=2,columnspan=1,sticky="nsew")
         tk.Label(self.leftFrame, text="B", font = self.font, bg = colors["fcB"]).grid(row=1,column=3,columnspan=1,sticky="nsew")        
 
-        self.button_flush = tk.Button(self.leftFrame, command=self.toggle_mode, text="flush" , font=self.font, wraplength = 1, relief = tk.SUNKEN, bg=colors["active"])
-        self.button_flush.grid(row=3, column=1,sticky="nsew")
-        self.button_measure = tk.Button(self.leftFrame, command=self.toggle_mode, text="measure" , font=self.font, wraplength = 1, relief = tk.RAISED)
-        self.button_measure.grid(row=2, column=1,sticky="nsew")
-        colors["neutralButton"] = self.button_measure.cget("bg")
+        self.flowScaleA = tk.Scale(self.leftFrame, from_=fc.maxFlowA, to=0, orient=tk.VERTICAL, length=50)
+        self.flowScaleA.grid(row=2, column=2, rowspan=2, sticky="nsew")
+        self.flowScaleA.set(0)
+        self.flowScaleA.bind("<ButtonRelease-1>", self.changeFlowRate)
 
-        self.flushScaleA = tk.Scale(self.leftFrame, from_=fc.maxFlowA, to=0, orient=tk.VERTICAL, length=50, bg=colors["flush"])
-        self.flushScaleA.grid(row=3, column=2, sticky="nsew")
-        self.flushScaleA.set(self.profiles[0]["fRateA"])
-        self.flushScaleA.bind("<ButtonRelease-1>", self.changeFlowRate)
-
-        self.measureScaleA = tk.Scale(self.leftFrame, from_=fc.maxFlowA, to=0, orient=tk.VERTICAL, length=50, bg=colors["measure"])
-        self.measureScaleA.grid(row=2, column=2, sticky="nsew")
-        self.measureScaleA.set(self.profiles[0]["mRateA"])
-        self.measureScaleA.bind("<ButtonRelease-1>", self.changeFlowRate)
-
-        self.flushScaleB = tk.Scale(self.leftFrame, from_=fc.maxFlowB, to=0, orient=tk.VERTICAL, length=50, bg=colors["flush"])
-        self.flushScaleB.grid(row=3, column=3, sticky="nsew")
-        self.flushScaleB.set(self.profiles[0]["fRateB"])
-        self.flushScaleB.bind("<ButtonRelease-1>", self.changeFlowRate)
-
-        self.measureScaleB = tk.Scale(self.leftFrame, from_=fc.maxFlowB, to=0, orient=tk.VERTICAL, length=50, bg=colors["measure"])
-        self.measureScaleB.grid(row=2, column=3, sticky="nsew")
-        self.measureScaleB.set(self.profiles[0]["mRateB"])
-        self.measureScaleB.bind("<ButtonRelease-1>", self.changeFlowRate)
+        self.flowScaleB = tk.Scale(self.leftFrame, from_=fc.maxFlowB, to=0, orient=tk.VERTICAL, length=50)
+        self.flowScaleB.grid(row=2, column=3, rowspan=2, sticky="nsew")
+        self.flowScaleB.set(0)
+        self.flowScaleB.bind("<ButtonRelease-1>", self.changeFlowRate)
 
 
         #------ right frame: plot canvas ------
@@ -112,37 +93,13 @@ class FlowControlFrame(tk.Frame):
         
 
     def changeFlowRate(self, event=None):
-        if self.isFlushing:
-            self.fc.set_flow(self.flushScaleA.get(), self.flushScaleB.get())
-        else:
-            self.fc.set_flow(self.measureScaleA.get(), self.measureScaleB.get())
-
-    def toggle_mode(self, isFlushing = None):        
-
-        defaultbg = colors["neutralButton"]
-        activebg = colors["active"]
-
-        if isFlushing is None:
-            self.isFlushing = not self.isFlushing
-        else:
-            self.isFlushing = isFlushing
-
-        self.button_flush.config(relief = [tk.RAISED, tk.SUNKEN][1*self.isFlushing], bg = [defaultbg, activebg][1*self.isFlushing])
-        self.button_measure.config(relief = [tk.SUNKEN, tk.RAISED][1*self.isFlushing], bg = [activebg, defaultbg][1*self.isFlushing])
-        self.changeFlowRate()        
-        
-    def set_flushMode(self, flushMode):
-        self.toggle_mode(flushMode)
+        self.fc.set_flow(self.flowScaleA.get(), self.flowScaleB.get())
         
 
     def update(self, selfCalling = True):
         self.status = self.fc.check_status()
-        
-        if self.isFlushing:
-            newTargets = [self.flushScaleA.get(), self.flushScaleB.get()]
-        else:
-            newTargets = [self.measureScaleA.get(), self.measureScaleB.get()]          
-            
+    
+        newTargets = [self.flowScaleA.get(), self.flowScaleB.get()]
         self.dataBuffer.add(self.fc.get_flow(int(self.conf["decimalPlaces"])) + newTargets, time.time())
 
         t = self.dataBuffer.get_time(timeOffset = -time.timezone)
@@ -165,10 +122,8 @@ class FlowControlFrame(tk.Frame):
             self.after(1000, self.update)
 
     def set(self,flowPattern):
-        self.flushScaleA.set(flowPattern.flush.rateA)
-        self.flushScaleB.set(flowPattern.flush.rateB)
-        self.measureScaleA.set(flowPattern.measure.rateA)
-        self.measureScaleB.set(flowPattern.measure.rateB)
+        self.flowScaleA.set(flowPattern.flush.rateA)
+        self.flowScaleB.set(flowPattern.flush.rateB)        
 
     def on_resize(self, event):
         pass

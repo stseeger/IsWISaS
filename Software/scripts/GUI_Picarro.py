@@ -65,7 +65,9 @@ class PicarroFrame(tk.Frame):
         if type(conf) is dict:
             self.conf=conf
         else:
-            self.conf = configLoader.load_confDict(confFile)
+            self.conf = configLoader.load_confDict(conf)
+
+        conf = self.conf
 
         # try to locate the picarro log dir
         if type(conf["rawLogSearchPaths"]) is list:
@@ -75,7 +77,8 @@ class PicarroFrame(tk.Frame):
                     break
         else:
             logDir = conf["rawLogSearchPaths"]
-
+        print(logDir)
+        print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXx')
         # initialize the picarro log file reader
         self.reader = LogFileReader.Reader(conf["logDescriptor"], logDir,
                                            bufferSize = int(conf["bufferSize"]),
@@ -403,7 +406,7 @@ class ValvePicarroFrame(PicarroFrame):
         def __init__(self, master, conf, *args, **kwargs):
 
             if not type(conf) is dict:
-                conf = configLoader.load_confDict(conf)
+                conf = configLoader.load_confDict(conf)            
 
             self.valveReader = LogFileReader.Reader(conf["valveLogDescriptor"], conf["valveLogPath"])
             super(ValvePicarroFrame,self).__init__(master, conf, *args, **kwargs)

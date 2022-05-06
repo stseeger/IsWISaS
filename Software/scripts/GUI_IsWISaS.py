@@ -5,6 +5,7 @@ import LogFileReader
 import ExtraWidgets
 import const
 
+import Sequencer
 import GUI_ValveControl
 import GUI_FlowControl
 import GUI_Picarro
@@ -20,194 +21,63 @@ def secs2DateString(seconds_POSIX, stringFormat = "%m-%d/%H:%M:%S"):
     return time.strftime(stringFormat,time.gmtime(seconds_POSIX))
 
 class MetaController():
-    def __init__(self, valves, flow, picarro=None):
+    def __init__(self, sequence, flow, picarro=None):
 
-        self.valves = valves
+        self.sequence = sequence
         self.flow = flow
         self.picarro = picarro
 
-        valves.metaController = self
+        sequence.metaController = self
         flow.metaController = self
         if not picarro is None:
             picarro.metaController = self
-        
-        for key in flow.conf["profile"].keys():
-            valves.conf["profile"][key] = flow.conf["profile"][key]        
 
 
 class ValveControlFrame(GUI_ValveControl.ValveControlFrame):
 
-    def __init__(self, master, vc, valveConfigFile = "../config/valve.cfg", *args, **kwargs):
-        super(ValveControlFrame,self).__init__(master, vc, valveConfigFile, *args, **kwargs)
+    def __init__(self, master, probeSequencer, *args, **kwargs):
+        super(ValveControlFrame,self).__init__(master, probeSequencer, *args, **kwargs)
 
+        self.conf = self.sequ.conf
         self.picarroInfo = None
         
         ExtraWidgets.ToolTip(self.extraLabel, u"Current H\u2082O values from the Picarro\n"+\
                                             u"Left click: enable/disable H\u2082O adapted valve switching") 
-        self.check_Picarro()
+        #self.check_Picarro()
 
     def extraLabel_click(self, event=None):
         self.conf["autoSwitchEnable"] = not (self.conf["autoSwitchEnable"] > 0)
 
-    def refresh_configuration(self):
-
-        # step 1: reload conf for the valve controller
-        super(ValveControlFrame, self).refresh_configuration()
-
-        # step 2: reload conf for the flow controller
-        freshFlowConf = configLoader.load_confDict(self.metaController.flow.conf["confFile"])
-        for key in freshFlowConf["profile"].keys():
-            self.metaController.flow.conf["profile"][key] = freshFlowConf["profile"][key]
-
-        self.metaController.flow.fc.set_flowCalibration(freshFlowConf["calibration"])
-
+    def update(self):
+        try:
+            self.check_Picarro()
+        except:
+            pass
+        super(ValveControlFrame,self).update()       
 
     def check_Picarro(self):        
-
-        try:
-            self.picarroInfo = self.metaController.picarro.latestInfo
-        except:
-            self.picarroInfo = SocketPickle.receive(self.conf["socket_Host"], self.conf["socket_Port"])       
-
-        if "flushTarget_H2O" in self.currentProbeProfile.keys():
-
-            activeCol = ["#c1cdcd", "#bdf"][self.conf["autoSwitchEnable"]>0]
-            if not self.picarroInfo is None:
-
-                index = int(self.picarroInfo["H2O"]>=self.conf["H2O_yellowAlert"]) + \
-                        int(self.picarroInfo["H2O"]>=self.conf["H2O_redAlert"])
-
-                textCol = "#000"
-                if self.picarroInfo["H2O"] <= self.currentProbeProfile["flushTarget_H2O"]: textCol = "#fff"
-                if self.picarroInfo["H2O"] >= self.conf["H2O_yellowAlert"]: textCol = "#f80"
-                if self.picarroInfo["H2O"] >= self.conf["H2O_redAlert"]: textCol = "#f00"
-                
-                self.extraLabel.configure(text=u"H\u2082O: " + "%5.0f [ppmV]"%self.picarroInfo["H2O"],
-                                          bg = activeCol, fg = textCol)           
-                
-            else:
-                self.extraLabel.configure(text=u"H\u2082O:     no data      ", bg="#ddd", fg="#444")
-        
-        self.after(1000, self.check_Picarro)       
-            
-
-    def toggle_flowMode(self, newMode=None, propagate = True):
-
-        super(ValveControlFrame, self).toggle_flowMode(newMode)
-
-        try: id(self.metaController)
-        except: return
-
-        if propagate:
-            self.metaController.flow.toggle_mode(self.flowMode!="measure", propagate = False)
-
-    def toggle_sequence(self, event=None):
-        super(ValveControlFrame, self).toggle_sequence(event)
-
-        try: id(self.metaController)
-        except: return
-        
-        self.metaController.flow.changeFlowRate()
-
-    def set_probeProfile(self, ID=None):
-        super(ValveControlFrame, self).set_probeProfile(ID)       
-
-        try: id(self.metaController)
-        except: return
-
-        if ID is None: ID = self.activeID
-            
-        probeType = self.valveDict[ID].probeType
-        x=self.metaController.flow.conf["profile"][probeType]       
-
-        self.metaController.flow.flushScaleA.set(x["fRateA"])
-        self.metaController.flow.flushScaleB.set(x["fRateB"])
-        self.metaController.flow.measureScaleA.set(x["mRateA"])
-        self.metaController.flow.measureScaleB.set(x["mRateB"])
-
-    def get_coolDownTime(self, ID):
-        if ID == "":
-            return self.conf["autoSwitchCooldown"]
-        
-        return self.conf["ID"][ID]["distance"] * self.conf["autoSwitchCooldown"]/10
-        
-
-    def measuredEnough(self):        
-        original = super(ValveControlFrame, self).measuredEnough()
-        self.switchCode = const.SWITCH_TIMEOUT
-
-        try: id(self.metaController)
-        except:
-            self.switchCode = 2
-            return original
-
-        if self.conf["autoSwitchEnable"] < 1 or self.picarroInfo is None:
-            return original
-
-        a = self.picarroInfo["stable"]
-        b = self.get_coolDownTime(self.activeID) < self.currentDuration()
-
-        if a and b: self.switchCode = const.SWITCH_OPTIMUM
-        return original or (a and b)
-
-
-    def flushedEnough(self):        
-        original = super(ValveControlFrame, self).flushedEnough()
-        self.switchCode = const.SWITCH_TIMEOUT
-
-        try: id(self.metaController)
-        except: return original
-
-        if self.conf["autoSwitchEnable"] < 1 or self.picarroInfo is None:
-            return original
-
-        try:
-            a = self.picarroInfo["H2O"] < self.currentProbeProfile["flushTarget_H2O"]
-        except:
-            return original
-        b = self.get_coolDownTime(self.activeID) < self.currentDuration()
-
-        if a and b: self.switchCode = const.SWITCH_OPTIMUM    
-        return original or (a and b)
-
-    def continueSequence(self, skip=False):
-        super(ValveControlFrame, self).continueSequence(skip,
-                                                        measure_after_flushTimeout=self.conf["autoSwitchEnable"] < 1)        
-
-        try: H2O = self.picarroInfo["H2O"]
-        except: return
-        
-        duration = self.currentDuration()        
-        v1 = (H2O > self.conf["H2O_yellowAlert"]) and self.conf["autoSwitchEnable"] and (duration > 5)
-        v2 = (H2O > self.conf["H2O_redAlert"])    and self.conf["autoSwitchEnable"] and (duration > 5)
-        #t  = duration > self.conf["autoSwitchCooldown"]
-
-        activeProfile = self.conf["ID"][self.activeID]["profile"]        
-
-        #if v1 and (activeProfile != "flush"):
-        #    print("!!! Wetness alarm! Leaving valve " + self.activeID)    
-
-        if (v1 or v2) and (activeProfile != "flush"):
-            print("!!! Wetness alarm! Leaving valve " + self.activeID)    
-            print("    and disabling it (as well as its box)")            
-            for ID in self.valveDict.keys():
-                if ID.startswith(self.activeID[0]) and not (ID == self.conf["flushID"]):
-                    self.valveDict[ID].stateVar.set(0)
-
-        if (v2 or v1) and (activeProfile != "flush"):            
-            #self.open_valve(self.conf["flushID"], withinSequence=True)
-            self.valveButton_click(ID=self.conf["flushID"])
-            self.activeID = self.conf["flushID"]
-            self.set_probeProfile()    
-            #self.toggle_sequence()
+        self.sequ.picarroInfo = self.sequ.metaController.picarro.latestInfo
+    
     
 class FlowControlFrame(GUI_FlowControl.FlowControlFrame):
 
-    def __init__(self, master, fc, flowConfigFile, valveReader, *args, **kwargs):            
-
-
+    def __init__(self, master, fc, flowConfigFile, valveReader, *args, **kwargs):
         self.valveReader = valveReader
+        self.currentProbe = None
+        self.metaController = None
+        
         super(FlowControlFrame,self).__init__(master, fc, flowConfigFile, *args, **kwargs)
+
+    def synchronizeFlow(self):
+        try:
+            flowPattern = self.metaController.sequence.get_activeProbeProfile()
+            probe = self.metaController.sequence.activeProbe
+        except:
+            return
+
+        self.flowScaleA.set(flowPattern[probe.mode]["flowA"])
+        self.flowScaleB.set(flowPattern[probe.mode]["flowB"])
+        self.changeFlowRate()
 
 
     def update(self, selfCalling=True):
@@ -240,15 +110,27 @@ class FlowControlFrame(GUI_FlowControl.FlowControlFrame):
         plot.vertLines(startTimes, labels = startLabels, tag = "valveStarts", color="gray60", width=1)
         plot.vertLines(changeTimes, tag = "valveChanges", color="gray90", width=1)
 
-    def toggle_mode(self, newMode=None, propagate = True):        
+        if self.metaController is None:
+            return
 
-        super(FlowControlFrame, self).toggle_mode(newMode)
-        try: id(self.metaController)
-        except: return
+        #----
+        flowPattern = self.metaController.sequence.get_activeProbeProfile()
+        
+        if self.currentProbe is None:
+            self.currentProbe = self.metaController.sequence.activeProbe
+            self.currentMode = self.currentProbe.mode
+            self.synchronizeFlow()
 
-        if propagate:
-            self.metaController.valves.toggle_flowMode(["measure","flush"][self.isFlushing], propagate = False)
+        if self.currentProbe != self.metaController.sequence.activeProbe or\
+           self.currentMode != self.currentProbe.mode:
 
+            self.currentProbe = self.metaController.sequence.activeProbe
+            self.currentMode = self.currentProbe.mode
+
+            self.synchronizeFlow()
+        #----
+
+        
 
 class PicarroFrame(GUI_Picarro.ValvePicarroFrame):
 
@@ -259,12 +141,36 @@ if __name__ == "__main__":
         
     # load the flow calibration before initializing the hardware
     flowCalibration = configLoader.load_confDict("../config/flow.cfg")["calibration"]
+    colors = configLoader.load_confDict("../config/default/colors.cfg")
+
+
+    print('################################')
+    print('Connecting to IsWISaS_Controller...')
 
     # scan all ports to find the one, where the "IsWISaS_Controller" is connected
     #deviceDict, portDict = SerialDevices.scan_serialPorts(9600, "../temp/serial.cch")
 
     dInfo = SerialDevices.find_device("IsWISaS_Controller", [9600], cachePath = "../temp/serial.cch")
-    d = SerialDevices.IsWISaS_Controller(dInfo["port"], dInfo["baudRate"], flowCalibration)
+
+    try:
+        d = SerialDevices.IsWISaS_Controller(dInfo["port"], dInfo["baudRate"], flowCalibration)
+        if d.status == 0:
+            print("Device not found at the cached serial port...")
+            deviceDict, portDict = SerialDevices.scan_serialPorts(baudRate = [9600], cachePath = "../temp/serial.cch", refresh_cache = True)
+            dInfo = SerialDevices.find_device("IsWISaS_Controller", [9600], cachePath = "../temp/serial.cch")
+            d = SerialDevices.IsWISaS_Controller(dInfo["port"], dInfo["baudRate"], flowCalibration)
+        if d.status == 0:
+            raise Exception("Failed to connect to IsWISaS Controller")
+        
+    except:
+        port = '80'
+        baudRate = 9600
+        d = SerialDevices.Mock_IsWISaS_Controller(port, baudRate, flowCalibration)
+
+    print('\n################################')
+    
+
+    proSequ = Sequencer.ProbeSequencer("../config/valve.cfg", d)
    
 
     root = tk.Tk()
@@ -285,16 +191,16 @@ if __name__ == "__main__":
 
     tab_parent = ttk.Notebook(rightFrame)
 
-    vf = ValveControlFrame(leftFrame, d, valveConfigFile = "../config/valve.cfg", relief=tk.RAISED)
+    vf= ValveControlFrame(leftFrame, proSequ, relief=tk.RAISED)
     vf.grid(column=0, row=0, sticky="nsew")
 
     pf = PicarroFrame(root, "../config/picarro.cfg")
     ff = FlowControlFrame(root,  d, flowConfigFile = "../config/flow.cfg", valveReader = pf.valveReader,  relief=tk.RAISED)
 
-    tab_parent.add(ff, text="Flow Control")
     tab_parent.add(pf, text="Picarro")
+    tab_parent.add(ff, text="Flow Control")
     tab_parent.pack(expand=1, fill=tk.BOTH)  
       
-    mc = MetaController(vf, ff, pf)
+    mc = MetaController(vf.sequ, ff, pf)
     root.mainloop()
         

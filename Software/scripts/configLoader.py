@@ -1,56 +1,5 @@
 import os
 import collections
-
-class FlowState():
-    def __init__(self, rate, duration, rate_unit = "mL/min", duration_unit = "s"):
-        self.rate = rate
-        self.duration = duration
-        self.rate_unit = rate_unit
-        self.duration_unit = duration_unit
-
-    def copy(self):
-        return(FlowState(self.rate, self.duration, self.rate_unit, self.duration_unit))
-
-    def __repr__(self):
-        return "<%d %s for %d %s>"%(self.rate, self.rate_unit,
-                                               self.duration, self.duration_unit)
-
-class FlowStateAB(FlowState):
-    def __init__(self, rateA, rateB, duration, rate_unit = "mL/min", duration_unit = "s"):
-
-        super(FlowStateAB, self).__init__(rateA, duration, rate_unit, duration_unit)
-        self.rateA = rateA
-        self.rateB = rateB
-
-    def copy(self):
-        return(FlowStateAB(self.rateA, self.rateB, self.duration))
-
-    def __repr__(self):
-        return "<%d & %d %s for %d %s>"%(self.rateA, self.rateB, self.rate_unit,
-                                         self.duration, self.duration_unit)
-        
-class FlowPattern():
-    def __init__(self, name, flush, measure):
-        self.name = name
-        self.flush = flush
-        self.measure = measure
-
-    def copy(self):
-        return(FlowPattern(self.flush.copy(), self.measure.copy()))
-
-
-    def __repr__(self):
-        return "<FlowPattern: flush %s and measure %s>"%(str(self.flush), str(self.measure))
-
-class Valve():
-    def __init__(self, number, name, flowPattern):
-        self.number = number
-        self.name = name
-        self.flow = flowPattern
-
-    def __repr__(self):        
-        flowPatternName = "undefined" if self.flow is None  else self.flow.name
-        return "<Valve: %s (%s)>"%(self.name, flowPatternName)
 #=================================
 
 def combine(primaryPath, secondaryPath, keyList = []):
@@ -89,7 +38,7 @@ def combine(primaryPath, secondaryPath, keyList = []):
     return combined
     
 
-def load_confDict(path, numericEntries = True, enforceList = []):
+def load_confDict(path, numericEntries = True, enforceList = [], verbose=True):
     print("Load", path, "...")
     confDict = {"confFile": path}
     f = open(path, 'r', encoding="utf-8")

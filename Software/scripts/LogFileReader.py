@@ -28,7 +28,9 @@ class ExtendedFileHandle():
 class Reader():
     def __init__(self, configFile, logDir, logScheme = '?', bufferSize = 4000, startTimeFromFilepathFun = None, fillBuffer=True):
         self.logDir = logDir
-        conf = configLoader.load_confDict(configFile)        
+        conf = configLoader.load_confDict(configFile)
+
+        print(logDir)
         
         if logScheme == '?':
             logScheme = self.detect_logScheme(conf)
@@ -70,8 +72,13 @@ class Reader():
         if pattern is None:
             pattern = self.conf["logFilePattern"]
             
-        pattern = "\/".join(support.formatStrings2RegEx(pattern).split('/'))               
-        matchingFiles = support.recursiveFileList(logDir, pattern)
+        pattern = "\/".join(support.formatStrings2RegEx(pattern).split('/'))
+        matchingFiles = None
+        try:
+            # fail safe
+            matchingFiles = support.recursiveFileList(logDir, pattern)
+        except:
+            matchingFiles = []
         return sorted(matchingFiles)
 
     def get_mostRecentLogFile(self):
@@ -159,7 +166,8 @@ class Reader():
         fileCounts = collections.OrderedDict()        
         
         # get lists of possible log files based on the specified naming patterns        
-
+        #print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+        
         for key in conf.keys():            
             if key in ["essentialColumns", "optionalColumns", "confFile"]:
                 continue            
