@@ -24,6 +24,10 @@ def process_cfg(cfg):
         if not "state" in cfg["ID"][ID].keys():
             cfg["ID"][ID]["state"] = 1
 
+        if not "distance" in cfg["ID"][ID].keys():
+            cfg["ID"][ID]["distance"] = 1
+            
+
     # when no sequence is defined, take the sequence from the probe definition table
     if not "sequence" in cfg.keys():        
         cfg["sequence"] = list(cfg['ID'].keys())
@@ -53,11 +57,14 @@ def process_cfg(cfg):
                 break
 
 
-    for key in cfg["probeType"].keys():
+    if not "default" in cfg["type"].keys():
+        cfg["type"]["default"] = {"flush": "60", "measure":"60", "flushTarget_H2O":"10000"}
+
+    for key in cfg["type"].keys():
         dataDict = {}
 
         for phase in ["flush", "measure"]:
-            splitEntry = cfg["probeType"][key][phase] .split('@')
+            splitEntry = cfg["type"][key][phase] .split('@')
 
             # everything before the @ should be a time specification
             # without a given unit, s is the default
@@ -93,9 +100,9 @@ def process_cfg(cfg):
                                 "overwriteValve":overwriteValve}
 
         dataDict["postFlush"] = dataDict["flush"].copy()
-        dataDict["flushTarget_H2O"] = cfg["probeType"][key]["flushTarget_H2O"]
+        dataDict["flushTarget_H2O"] = cfg["type"][key]["flushTarget_H2O"]
             
-        cfg["probeType"][key] = dataDict       
+        cfg["type"][key] = dataDict       
 
         
         
@@ -123,7 +130,7 @@ class Probe(SequenceItem):
     MEASURE = "measure"
     POSTFLUSH = "postFlush"
     
-    def __init__(self, ID, slot, group, probeType, enabled=True):
+    def __init__(self, ID, slot, group, type, enabled=True):
 
         super(Probe,self).__init__(ID, enabled)
 
@@ -136,7 +143,7 @@ class Probe(SequenceItem):
             self.slot =int(slot)
 
         self.group = group
-        self.type = probeType
+        self.type = type
         
         self.mode = self.FLUSH
         self.lastToggleTime = time.time()
@@ -203,7 +210,7 @@ class ProbeSequencer():
 
         IDTable = self.conf["ID"]
         sequence = self.conf["sequence"]        
-        probeTypeTable = self.conf["probeType"]
+        typeTable = self.conf["type"]
 
         self.initialID = self.conf["initialID"]
         
@@ -215,23 +222,23 @@ class ProbeSequencer():
 
         self.probeDict = collections.OrderedDict()
         for i, ID in enumerate(IDTable.keys()):
-            if IDTable[ID]["probeType"] in probeTypeTable.keys():
+            if IDTable[ID]["type"] in typeTable.keys():
                 pass
-                #probeType = IDTable[ID]["probeType"]
+                #type = IDTable[ID]["type"]
             else:
-                print("Probe type '"+IDTable[ID]["probeType"]+"' of probe'"+ID+"' is not defined, falling back to 'default'")
-                #probeType = "default"
+                print("Probe type '"+IDTable[ID]["type"]+"' of probe'"+ID+"' is not defined, falling back to 'default'")
+                #type = "default"
             self.probeDict[ID] = Probe(ID = ID,
                                        slot = IDTable[ID]["slot"],
                                        group = IDTable[ID]["group"],
-                                       probeType = IDTable[ID]["probeType"],                                       
+                                       type = IDTable[ID]["type"],                                       
                                        enabled = IDTable[ID]["state"]>0)
 
         self.sequence = []
         for i, ID in enumerate(sequence):
             self.sequence.append(SequenceItem(ID))
                             
-        self.probeTypes = probeTypeTable
+        self.profiles = typeTable
         
 
     def isActive(self):
@@ -254,10 +261,10 @@ class ProbeSequencer():
 
     def get_activeProbeProfile(self):
         try:
-            return self.probeTypes[self.activeProbe.type]
+            return self.profiles[self.activeProbe.type]
         except:
             #print("Probe type '"+self.activeProbe.type+"' is not defined, falling back to 'default'")
-            return self.probeTypes["default"]
+            return self.profiles["default"]
 
     def get_actuallyActiveProbe(self):
         overwriteID = self.get_activeProbeProfile()[self.activeProbe.mode]["overwriteValve"]
@@ -311,11 +318,7 @@ class ProbeSequencer():
         if self.get_activeProbeProfile()["flush"]["duration"]:
             self.toggle_activeProbeMode(Probe.FLUSH, switchCode)
         else:
-            self.toggle_activeProbeMode(Probe.MEASURE, switchCode)
-
-        #overwriteID = self.get_activeProbeProfile()[self.activeProbe.mode]["overwriteValve"]
-        #if overwriteID:
-        #    print(self.activeProbe.mode, self.activeProbe, 'over', self.probeDict[overwriteID])
+            self.toggle_activeProbeMode(Probe.MEASURE, switchCode)        
 
     def switch_sequence(self, newPosition, switchCode):
         self.position = newPosition
@@ -346,7 +349,7 @@ class ProbeSequencer():
         return self.get_duration() >= self.get_cooldownTime()
         
     def get_cooldownTime(self):
-        return self.conf["ID"][self.activeProbe.ID]["distance"] * self.conf["autoSwitchCooldown"]/10    
+        return self.conf["ID"][self.activeProbe.ID]["distance"] * self.conf["autoSwitchCooldown"]
 
     def isAlarmed(self):
 
@@ -394,16 +397,16 @@ class ProbeSequencer():
     def proceed(self, switchCode):
 
         if self.activeProbe.mode == Probe.FLUSH:
-            if self.get_activeProbeProfile()["measure"]["duration"]:
-                if not self.picarroInfo is None:
-                    if self.picarroInfo["H2O"] <= self.get_activeProbeProfile()["flushTarget_H2O"] :
-                        self.toggle_activeProbeMode(Probe.MEASURE, switchCode = switchCode)
-                    else:
-                        self.switch_sequence(self.get_nextPosition(), switchCode=switchCode)                        
+            if (switchCode == const.SWITCH_TIMEOUT and self.conf["insistOnFlushTarget"]) or\
+               self.get_activeProbeProfile()["measure"]["duration"]==0:
+                if self.get_activeProbeProfile()["measure"]["duration"]==0:
+                    print("\t\t measurement duration = 0s")
                 else:
-                    self.toggle_activeProbeMode(Probe.MEASURE, switchCode = switchCode)
+                    print("\t\t flush target missed :(")
+                self.switch_sequence(self.get_nextPosition(), switchCode=switchCode)                        
             else:
-                self.switch_sequence(self.get_nextPosition(), switchCode=switchCode)
+                self.toggle_activeProbeMode(Probe.MEASURE, switchCode = switchCode)
+            
             return
 
         if self.activeProbe.mode==Probe.POSTFLUSH or\
@@ -449,19 +452,19 @@ class ProbeSequencer():
 
         flushCode = self.threeStageCheck(Probe.FLUSH, self.flushTimeout, self.isDryEnough)
         if flushCode:
-            print("\t\t%s"%["timeout","dry"][flushCode-2])
+            print("\t\t%s"%["timeout","flush target met :)"][flushCode-2])
             self.proceed(flushCode)
             return
 
         measureCode = self.threeStageCheck(Probe.MEASURE, self.measureTimeout, self.isStableEnough)
         if measureCode:
-            print("\t\t%s"%["timeout","stable"][measureCode-2])
+            print("\t\t%s"%["timeout","stable measurement :)"][measureCode-2])
             self.proceed(measureCode)
             return
 
         postFlushCode = self.threeStageCheck(Probe.POSTFLUSH, self.postFlushTimeout, self.isDryEnough)
         if postFlushCode:
-            print("\t\t%s"%["timeout","dry"][measureCode-2])
+            print("\t\t%s"%["timeout","flush target met :)"][measureCode-2])
             self.proceed(measureCode)
             return
 
