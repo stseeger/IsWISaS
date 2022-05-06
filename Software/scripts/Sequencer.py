@@ -193,8 +193,8 @@ class ProbeSequencer():
         self.valveBuffer = DataBuffer.Buffer(100, self.conf["logFile"], parameters = [parActiveValve, parMeasurement, parSwitchCode])
 
         # ---------------------------------
-        self.toggle(enabled=self.conf["autostart"])
-        self.switch_probe(self.initialID, switchCode=0)
+        self.toggle(enabled=self.conf["autostart"])        
+        self.switch_probe(self.conf["initialID"], switchCode=0)
 
     def load_conf(self):
         

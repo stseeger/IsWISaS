@@ -136,6 +136,7 @@ class PicarroFrame(GUI_Picarro.ValvePicarroFrame):
 
     def broadcast(self, message):
         pass
+        #super(PicarroFrame).broadcast(message)        
 
 if __name__ == "__main__":
         
@@ -168,11 +169,7 @@ if __name__ == "__main__":
         d = SerialDevices.Mock_IsWISaS_Controller(port, baudRate, flowCalibration)
 
     print('\n################################')
-    
-
-    proSequ = Sequencer.ProbeSequencer("../config/valve.cfg", d)
    
-
     root = tk.Tk()
     root.title("IsWISaS")
     root.geometry("%dx%d+%d+%d"%(1000,850,1,0))
@@ -189,18 +186,20 @@ if __name__ == "__main__":
     rightFrame = tk.Frame(root)
     rightFrame.grid(row=0, column=1, sticky="nsew")    
 
-    tab_parent = ttk.Notebook(rightFrame)
-
-    vf= ValveControlFrame(leftFrame, proSequ, relief=tk.RAISED)
-    vf.grid(column=0, row=0, sticky="nsew")
+    tab_parent = ttk.Notebook(rightFrame)    
 
     pf = PicarroFrame(root, "../config/picarro.cfg")
     ff = FlowControlFrame(root,  d, flowConfigFile = "../config/flow.cfg", valveReader = pf.valveReader,  relief=tk.RAISED)
+
+    proSequ = Sequencer.ProbeSequencer("../config/valve.cfg", d)
+    vf= ValveControlFrame(leftFrame, proSequ, relief=tk.RAISED)
+    vf.grid(column=0, row=0, sticky="nsew")
 
     tab_parent.add(pf, text="Picarro")
     tab_parent.add(ff, text="Flow Control")
     tab_parent.pack(expand=1, fill=tk.BOTH)  
       
     mc = MetaController(vf.sequ, ff, pf)
+    
     root.mainloop()
         
