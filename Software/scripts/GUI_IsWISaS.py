@@ -136,6 +136,7 @@ class PicarroFrame(GUI_Picarro.ValvePicarroFrame):
 
     def broadcast(self, message):
         pass
+        #super(PicarroFrame).broadcast(message)        
 
 if __name__ == "__main__":
         

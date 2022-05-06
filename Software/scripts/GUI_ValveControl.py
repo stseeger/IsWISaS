@@ -13,8 +13,6 @@ import ExtraWidgets
 MAX_VALVES_PER_COLUMN = const.MAX_VALVES_PER_COLUMN
 colors = configLoader.load_confDict("../config/default/colors.cfg",
                                     verbose = __name__=="__main__")
-    
-
 class ValveControlFrame(tk.Frame):
     def __init__(self, master, probeSequencer, *args, **kwargs):
         super(ValveControlFrame,self).__init__(master, *args, **kwargs)
