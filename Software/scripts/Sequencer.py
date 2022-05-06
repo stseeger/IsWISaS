@@ -396,7 +396,7 @@ class ProbeSequencer():
         if self.activeProbe.mode == Probe.FLUSH:
             if self.get_activeProbeProfile()["measure"]["duration"]:
                 if not self.picarroInfo is None:
-                    if self.picarroInfo["H2O"] < self.get_activeProbeProfile()["flushTarget_H2O"] :
+                    if self.picarroInfo["H2O"] <= self.get_activeProbeProfile()["flushTarget_H2O"] :
                         self.toggle_activeProbeMode(Probe.MEASURE, switchCode = switchCode)
                     else:
                         self.switch_sequence(self.get_nextPosition(), switchCode=switchCode)                        
