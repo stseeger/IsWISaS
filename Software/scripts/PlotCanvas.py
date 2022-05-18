@@ -12,7 +12,7 @@ for y in range(-4,7):
 possibleTimeSpacings = [1, 10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 21600, 86400, 172800, 432000, 2592000, 15552000]
 
 class PlotCanvas(tk.Canvas):
-    def __init__(self,master, plotRangeX, plotRangeY, marginX=62, marginY=20, axes=True, selectionHandler = None, *args,**kwargs):
+    def __init__(self,master, plotRangeX, plotRangeY, marginX=62, marginY=20, axes=True, selectionHandler = None, YPrecision=1, *args,**kwargs):
         super(PlotCanvas,self).__init__(master=master,*args,**kwargs)
 
         self.pxWidth = int(self.cget("width"))
@@ -23,7 +23,7 @@ class PlotCanvas(tk.Canvas):
 
         self.plotRangeX = plotRangeX
         self.plotRangeY = plotRangeY
-        self.precisionY = 1
+        self.precisionY = YPrecision
 
         self.selectionHandler = selectionHandler
 
@@ -38,6 +38,8 @@ class PlotCanvas(tk.Canvas):
         self.bind("<ButtonRelease-3>",self.on_click_release)
         self.bind("<B3-Motion>",self.on_drag)
 
+        self.tag_bind("clickable", "<1>", self.objectClick)
+
         if str(type(axes)) == "<class 'bool'>": axes = [axes]
         if len(axes)==1: axes.extend(axes)
         if(axes[0]): self.draw_xAxis()
@@ -46,6 +48,32 @@ class PlotCanvas(tk.Canvas):
         self.buttonSpecs = [{"button":"right", "color":"#0af"}, {"button":"left", "color":"#fa0"}]
 
     #---------selection-------
+    def objectClick(self, event):
+        self.selectionHandler=None
+
+        item = self.find_closest(event.x, event.y)
+        tags = self.itemcget(item, "tags").split(' ')
+
+        ID=None
+        time=None
+        for tag in tags:            
+            if tag.startswith("ID:"):
+                ID= tag.split("ID:")[1]                
+            if tag.startswith("time:"):
+                time= tag.split("time:")[1]
+            if ID and time:
+                break
+
+        if time is None:
+            time = "all"
+
+        if ID is None:
+            ID = "none"
+            
+        print(ID +':'+ time)
+        
+
+        
     def get_buttonSpecs(self, event):        
         if event.num == "??":
             button = self.lastMouseButton
@@ -55,6 +83,10 @@ class PlotCanvas(tk.Canvas):
         return self.buttonSpecs[button==1]
         
     def on_click_release(self, event):
+
+        if self.selectionHandler is None:
+            return
+        
         specs = self.get_buttonSpecs(event)
         
         self.delete("selectStart_%s"%specs["button"])
@@ -64,6 +96,8 @@ class PlotCanvas(tk.Canvas):
         self.selectionHandler(self.selection[specs["button"]], button=specs["button"])       
 
     def on_click(self, event):
+        if self.selectionHandler is None:
+            return
         specs = self.get_buttonSpecs(event)
         self.selection[specs["button"]][0] = self.get_time(event)
         self.vertLines([self.selection[specs["button"]][0]], tag="selectStart_%s"%specs["button"], width=3, color=specs["color"])
@@ -128,7 +162,7 @@ class PlotCanvas(tk.Canvas):
             self.create_text(self.marginX-32, y, text=('%0.*f' %(precision, self.plotRangeY[0]+(spacing*i-firstTickOffset))), tags=["yAxis","tickLabel"])
         
 
-    def draw_xAxis(self, plotRangeX = None, optimalTicks = 10, timeFormat = "%H:%M:%S"):
+    def draw_xAxis(self, plotRangeX = None, optimalTicks = 10, timeFormat = "%H:%M:%S", precision=None):
         self.delete("xAxis")
 
         if not plotRangeX is None:
@@ -142,7 +176,11 @@ class PlotCanvas(tk.Canvas):
                 continue
 
             x = self.marginX + (spacing*i-firstTickOffset) * self.xFactor()
-            timeLabel =  time.strftime(timeFormat, time.gmtime(self.plotRangeX[0]+(spacing*i-firstTickOffset)))            
+            if timeFormat is None:
+                timeLabel = self.plotRangeX[0]+(spacing*i-firstTickOffset)
+            else:
+                timeLabel =  time.strftime(timeFormat, time.gmtime(self.plotRangeX[0]+(spacing*i-firstTickOffset)))
+            
             self.create_line(x, self.pxHeight-self.marginY+5, x, self.pxHeight-self.marginY, tags=["xAxis","tickMark"])
             self.create_text(x, self.pxHeight-self.marginY+12, text=timeLabel, tags=["xAxis","tickLabel"])
         
@@ -230,6 +268,31 @@ class PlotCanvas(tk.Canvas):
 
         if labelXoffset:
             self.create_text(self.getX(x[-1])-labelXoffset, self.getY(y[-1])-10,text = y[-1], fill = color, tags=tag)
+
+    def plotPoints(self, x, y, col, labels=None, labelOffsets=[0,0], idTag=None, timestamp=None, tag="points", size=5):
+        self.delete(tag)
+
+        if not isinstance(col, list):
+            col = [col for i in range(len(x))]
+
+        if idTag is None:
+            idTag = labels
+
+        for i in range(len(x)):
+            tags = [tag, "clickable"]
+            if not idTag is None:
+                tags = tags + ["ID:"+idTag[i]]
+            if not timestamp is None:
+                tags = tags + ["time:%.0f"%timestamp[i]]
+            
+            self.create_rectangle(self.getX(x[i])-size, self.getY(y[i])-size,
+                                  self.getX(x[i])+size, self.getY(y[i])+size,
+                                  fill=col[i], tags=tags)
+
+            if not labels is None:                
+                tags = tags + ["ID:"+labels[i]]
+                self.create_text(self.getX(x[i])+labelOffsets[0],
+                                 self.getY(y[i])+labelOffsets[1], text=labels[i], tags=tags)
 
     def on_resize(self, width, height):
         self.pxWidth = width

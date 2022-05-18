@@ -305,7 +305,7 @@ class IsWISaS_Controller(SerialDevice):
 class Mock_IsWISaS_Controller(IsWISaS_Controller):
     
     def __init__(self, port, baudrate, flowCalibration = None):
-        pass
+        self.counter = 0
 
     def get_something(self, cmd, attempts=3, waitTime=500):
         # return super().get_something(cmd, attempts, waitTime)
@@ -330,7 +330,12 @@ class Mock_IsWISaS_Controller(IsWISaS_Controller):
 
     def get_flow(self, decimalPlaces=1):
         # return super().get_flow(decimalPlaces)
-        print('!!! Check connection to IsWISaS_Controller!!!')
+
+        self.counter+=1
+        if self.counter == 10:
+            print('!!! Check connection to IsWISaS_Controller!!!')
+            self.counter = 0
+
         return [0,0]
 
     def set_flow(self, flowA, flowB=0):

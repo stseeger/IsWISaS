@@ -16,21 +16,23 @@ colors=["#f00","#ff0","#0f0","#0ff","#00f","#f0f",
         "#b00","#bb0","#0b0","#0bb","#00b","#b0b",
         "#300","#330","#030","#033","#003","#303"]
 
-def request_picarroDat(timeWindow, endTime=None):
+def request_picarroDat(timeWindow, pLogDirs, endTime=None):
     if endTime is None:
-        endTime = time.time()
-    #pLogDir = "C:/UserData/DataLog_User"
-    pLogDir = "../../DataLog_User"
-    pDat = PicarroPeeker.peek(logDir = pLogDir, timeWindow_in_hours = timeWindow)
+        endTime = time.time()    
 
-    return pDat
-    
+    for path in pLogDirs:
+        try:
+            pDat = PicarroPeeker.peek(logDir = path, timeWindow_in_hours = timeWindow)
+            return pDat
+        except:
+            print("No log files found in '"+path+"' :(")
 
-class SummaryFrame(tk.Frame):
+
+class SummarizerFrame(tk.Frame):
     
     def __init__(self, master, options, *args, **kwargs):
 
-        super(SummaryFrame,self).__init__(master, *args, **kwargs)
+        super(SummarizerFrame,self).__init__(master, *args, **kwargs)
 
         self.conf = configLoader.combine("../config/picarro.cfg", "../config/default/picarro.cfg")
 
@@ -40,9 +42,6 @@ class SummaryFrame(tk.Frame):
         self.latestPicarroPeek = -1
         self.latestPicarroPeekRead = -1
         self.childProcess = None
-
-        w = master.winfo_width()
-        h = master.winfo_height()
         
         self.options = options
 
@@ -50,23 +49,29 @@ class SummaryFrame(tk.Frame):
         x.grid(row=0, column=1, rowspan=6, sticky="nsew")
 
         self.legendCanvas = PlotCanvas.PlotCanvas(x, bg="white", plotRangeX=[0,1], plotRangeY=[0,1],
-                                                  height=h*0.7, width=w*0.1, axes=False, marginX=10)
+                                                  height=400, width=100, axes=False, marginX=10)
         self.legendCanvas.grid(row=0, column=0, sticky="nsew", rowspan=2, columnspan=2)
 
         tk.Label(x, text ='End time (UTC)').grid(row=2,column=0)
         self.endTimeEntry = tk.Entry(x, text="")
         self.endTimeEntry.grid(row=3, column=0)
         self.endTimeEntry.insert(0,support.nowString())
-        self.endTimeEntry.config(state ='disabled')
 
         tk.Label(x, text ='Time window (h)').grid(row=4,column=0)        
         self.timeWindowSelection = tk.Spinbox(x, values=(1,3,6,12,24,48,120,240),width=3)
-        self.timeWindowSelection.grid(row=5, column=0, sticky="nsew", padx=30)
+        self.timeWindowSelection.grid(row=5, column=0, sticky="nsew")
         self.timeWindowSelection.delete(0,"end")
         self.timeWindowSelection.insert(0,24)
 
         bReload = tk.Button(x, text="Summarize", command = self.triggerPicarroPeek)
-        bReload.grid(row=6,column=0, sticky="nsew")
+        bReload.grid(row=6,column=0)
+
+        bReplot = tk.Button(x, text="Plot again", command = self.plotSummary)
+        bReplot.grid(row=7,column=0)
+
+        tk.Label(x, text="IgnoreList").grid(row=8, column=0)
+        self.ignoreListEntry = tk.Entry(x)
+        self.ignoreListEntry.grid(row=9, column=0)
         
 
         for i in range(3):
@@ -77,7 +82,7 @@ class SummaryFrame(tk.Frame):
             
             self.canvasList.append(PlotCanvas.PlotCanvas(x, bg="white",
                                                          plotRangeX=[0,1],plotRangeY=[0,1],
-                                                         height=h*0.3, width=w*0.3,
+                                                         height=200, width=400,
                                                          marginX=60, marginY=25))
             self.canvasList[i*2].draw_xAxis(timeFormat=None, optimalTicks=5)
             self.canvasList[i*2].grid(row=i*2, column=1)
@@ -94,7 +99,7 @@ class SummaryFrame(tk.Frame):
             
             self.canvasList.append(PlotCanvas.PlotCanvas(x, bg="white",
                                                          plotRangeX=[0,1],plotRangeY=[0,1],
-                                                         height=h*0.3, width=w*0.5,
+                                                         height=200, width=600,
                                                          marginX=60, marginY=25))
             self.canvasList[i*2+1].draw_xAxis(timeFormat=None, optimalTicks=8)
             self.canvasList[i*2+1].grid(row=i*2, column=3)
@@ -105,14 +110,16 @@ class SummaryFrame(tk.Frame):
             self.parListboxLabelX.append(ExtraWidgets.ListboxLabel(x, self.options,0))
             self.parListboxLabelX[i*2+1].grid(row=i*2+1,column=3, sticky = 'we')
 
+            
+
             self.update()
 
     def triggerPicarroPeek(self):
 
         hours = float(self.timeWindowSelection.get())
-        pDat = request_picarroDat(hours)
-        summary = self.summarize(pDat, hours)
-        self.plotSummary(summary)
+        pDat = request_picarroDat(hours, self.conf["rawLogSearchPaths"])
+        self.summary = self.summarize(pDat, hours)
+        self.plotSummary(self.summary)
         
 
     def readPicarroPeek(self):
@@ -145,19 +152,27 @@ class SummaryFrame(tk.Frame):
 
         self.after(500, self.update)
 
-    def plotSummary(self, summary):
+    def plotSummary(self, summary=None):
+
+        if summary is None:
+            summary = self.summary
+
+        ignoreList = self.ignoreListEntry.get().split(';')
+        
         for i in range(len(self.canvasList)):
 
             labels = list()
             xVals = list()
             yVals = list()
+            timestamps=list()
 
             ix = self.parListboxLabelX[i].activeIndex
-            iy = self.parListboxLabelY[i].activeIndex
+            iy = self.parListboxLabelY[i].activeIndex           
 
             for val in summary["data"]:
-                if val[0]=="xxx": continue
+                if val[0] in ["xxx"]+ignoreList: continue
                 labels.append(val[0])
+                timestamps.append(val[1])
                 xVals.append(val[ix+1])
                 yVals.append(val[iy+1])
 
@@ -177,15 +192,15 @@ class SummaryFrame(tk.Frame):
                     labCols.append(cols[-1])
             
         
-            self.canvasList[i].plotPoints(xVals,yVals,cols)
+            self.canvasList[i].plotPoints(xVals,yVals,cols, idTag = labels, timestamp=timestamps)
 
         self.legendCanvas.plotRangeY = [0,len(labs)]
-        self.legendCanvas.plotPoints([0.05 for a in range(len(labs))], list(range(len(labs),-1,-1)), labCols, labs, [30,0])
+        self.legendCanvas.plotPoints(x=[0.05 for a in range(len(labs))],
+                                     y=list(range(len(labs),-1,-1)),
+                                     col=labCols, labels=labs, labelOffsets=[30,0])
 
     def summarize(self, pDat, timeWindow_in_hours):
-        #pLogDir = "../../DataLog_User"
-        #pDat = PicarroPeeker.peek(logDir = pLogDir, timeWindow_in_hours = timeWindow_in_hours)
-
+        
         valves = {"time":[],"ID":[],"mode":[]}
         valveFile = open(self.conf["valveLogPath"]+"/valves.log","r")                            
         valveDat = valveFile.readlines()
@@ -234,14 +249,13 @@ class SummaryFrame(tk.Frame):
         return({"columns":["ID","time","fTime","mTime","H2O","d18O","d2H"], "data":res})
 
 if __name__ == "__main__":
+    if 1:
+        root = tk.Tk()
+        root.title("Summary")
+        root.geometry("%dx%d+%d+%d"%(1500,750,1,0))
 
-
-    root = tk.Tk()
-    root.title("WIP_Summary")
-    root.geometry("%dx%d+%d+%d"%(1200,700,1,0))
-    root.update()
-
-    sf = SummaryFrame(root,options=["time","fTime","mTime","H2O","d18O","d2H"])
-    sf.pack(fill = tk.BOTH, expand=True)       
-    root.mainloop()
+        sf = SummarizerFrame(root,options=["time","fTime","mTime","H2O","d18O","d2H"])
+        sf.pack(fill = tk.BOTH, expand=True)
+       # sf.update()
+        root.mainloop()
 

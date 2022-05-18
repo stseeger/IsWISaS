@@ -2,7 +2,7 @@
 
 #define DEVICE "IsWISaS_Extension"
 #define MODEL "C"
-#define VERSION "1.1"
+#define VERSION "1.2"
 
 #define RS485_BAUDRATE 1200
 #define RS485_MODE_CONTROL_PIN 13
@@ -10,9 +10,8 @@
 #define INPUT_BUFFER_SIZE 32
 char inputBuffer[INPUT_BUFFER_SIZE];
 
-#define VALVE_COUNT 16
-const int valvePins[VALVE_COUNT] = {10, 11, 12, A0, A1, A2, A5, A4, 9,  8,  7,  6,  5,  4,  3,  2};
-//const int valvePins[VALVE_COUNT] = {2, 3, 4, 5, 6, 7, 8, 9, A4,  A5,  A2,  A1,  A0,  12,  11,  10};
+#define VALVE_COUNT 8
+const int valvePins[VALVE_COUNT] = {2, 3, 4, 5, 6, 7, 8, 9};
 
 #define ID_PIN A3
 #define ANALOG_ID_TOLERANCE 7

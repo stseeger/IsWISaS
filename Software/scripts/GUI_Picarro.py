@@ -310,10 +310,9 @@ class PicarroFrame(tk.Frame):
                 self.plot_selection()
 
         self.is_stable = allPass
-
-
+        
         self.latestInfo = {"H2O": self.current["H2O"],
-                           "stable": allPass}
+                           "stable": self.is_stable}
 
         self.broadcast(self.latestInfo)
 

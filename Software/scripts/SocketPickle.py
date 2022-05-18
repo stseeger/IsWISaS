@@ -12,7 +12,7 @@ def _broadcast(HOST, PORT, message):
 
 def _receive(HOST, PORT):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(0.4)
+    s.settimeout(0.55)
     s.bind((HOST, int(PORT)))
     s.listen(1)
     conn, addr = s.accept()

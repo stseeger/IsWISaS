@@ -15,6 +15,16 @@ def secs2String(timestamp, formatString="%Y%m%d%H%M%S"):
     date_time = datetime.datetime.fromtimestamp(timestamp)
     return date_time.strftime(formatString)
 
+def nowString():
+    return secs2String(time.time(), "%Y-%m-%d %H:%M:%S")
+
+def unique(someList):
+    u=[]
+    for entry in someList:
+        if not entry in u:
+            u.append(entry)
+    return u
+
 def insert_timeStamps(template):
     matches = re.findall("%.",template)
     timeStrings   = [time.strftime(match,time.gmtime(time.time())) for match in matches]
