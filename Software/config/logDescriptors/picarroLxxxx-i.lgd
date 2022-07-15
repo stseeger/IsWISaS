@@ -28,6 +28,14 @@ L2130-i| commentChar      : #
 L2130-i| seperator        : 26
 L2130-i| encoding         : utf-8
 
+L2140-i| logFilePattern   : %Y/%m/%d/H(G|B|I|K)DS\d{2,4}-%Y%m%d-%H%M%SZ-DataLog_User.dat
+L2140-i| timeColumns      : DATE; TIME
+L2140-i| timeFormatString : %Y-%m-%d %H:%M:%S.%f
+L2140-i| skipLines        : 0
+L2140-i| commentChar      : #
+L2140-i| seperator        : 26
+L2140-i| encoding         : utf-8
+
 ########################################################################################
 #part2: define where (under which column name) to find the parameters of interest
 # the first line determines how they will be loaded into the the script
@@ -40,12 +48,14 @@ L2130-i| encoding         : utf-8
 |L1102-i         : DATE; TIME;  H2O; D_1816     ; D_DH
 |L2120-i         : DATE; TIME;  H2O; Delta_18_16; Delta_D_H
 |L2130-i         : DATE; TIME;  H2O; Delta_18_16; Delta_D_H
+|L2140-i         : DATE; TIME;  H2O; Delta_18_16; Delta_D_H
 -
 
 # optionalColumns could be missing
-|optionalColumns: CH4            ;              meOH; yEffA
-|units          :        ?       ;        ?         ;      ?
-|L1102-i        : ORGANIC_CH4CONC; ORGANIC_MEOH_AMPL;   H2O_Y_EFF
-|L2120-i        : organic_ch4conc;  organic_MeOHampl; h2o_y_eff_a 
-|L2130-i        : CH4            ;        ?         ;      ?
+|optionalColumns:             CH4;              meOH;       yEffA;   delta17O
+|units          :        ?       ;        ?         ;      ?     ;      ?
+|L1102-i        : ORGANIC_CH4CONC; ORGANIC_MEOH_AMPL;   H2O_Y_EFF;      ?
+|L2120-i        : organic_ch4conc;  organic_MeOHampl; h2o_y_eff_a;      ?
+|L2130-i        : CH4            ;        ?         ;      ?     ;      ?
+|L2140-i        :      ?         ;        ?         ;      ?     ; Delta_17_16
 -

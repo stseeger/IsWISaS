@@ -10,19 +10,24 @@ import statLib
 import PlotCanvas
 import ExtraWidgets
 import support
+import random
 
-colors=["#f00","#ff0","#0f0","#0ff","#00f","#f0f",                    
-        "#700","#770","#070","#077","#007","#707",
-        "#b00","#bb0","#0b0","#0bb","#00b","#b0b",
-        "#300","#330","#030","#033","#003","#303"]
+colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(200)]
 
-def request_picarroDat(timeWindow, pLogDirs, endTime=None):
+def invert_color(hexString):
+    rgbVals = tuple(255 - int(hexString[i:i+2], 16) for i in (1, 3, 5))
+    return"#%02x%02x%02x"%rgbVals
+        
+
+def request_picarroDat(backwardsHours, pLogDirs, endTime=None, timeWindow=None):
     if endTime is None:
-        endTime = time.time()    
+        endTime = time.time()
 
-    for path in pLogDirs:
+    print(pLogDirs)
+
+    for path in [pLogDirs[1]]:
         try:
-            pDat = PicarroPeeker.peek(logDir = path, timeWindow_in_hours = timeWindow)
+            pDat = PicarroPeeker.peek(backwardsHours = backwardsHours, logDir = path, timeWindow=timeWindow)
             return pDat
         except:
             print("No log files found in '"+path+"' :(")
@@ -42,6 +47,8 @@ class SummarizerFrame(tk.Frame):
         self.latestPicarroPeek = -1
         self.latestPicarroPeekRead = -1
         self.childProcess = None
+        self.timeWindow = None
+        self.selection = None
         
         self.options = options
 
@@ -49,7 +56,7 @@ class SummarizerFrame(tk.Frame):
         x.grid(row=0, column=1, rowspan=6, sticky="nsew")
 
         self.legendCanvas = PlotCanvas.PlotCanvas(x, bg="white", plotRangeX=[0,1], plotRangeY=[0,1],
-                                                  height=400, width=100, axes=False, marginX=10)
+                                                  height=500, width=100, axes=False, marginX=10, objectClickHandler=self.objectClickHandler)
         self.legendCanvas.grid(row=0, column=0, sticky="nsew", rowspan=2, columnspan=2)
 
         tk.Label(x, text ='End time (UTC)').grid(row=2,column=0)
@@ -69,9 +76,12 @@ class SummarizerFrame(tk.Frame):
         bReplot = tk.Button(x, text="Plot again", command = self.plotSummary)
         bReplot.grid(row=7,column=0)
 
-        tk.Label(x, text="IgnoreList").grid(row=8, column=0)
+        bRawDat = tk.Button(x, text="Raw data", command = self.plotRawData)
+        bRawDat.grid(row=8,column=0)
+
+        tk.Label(x, text="IgnoreList").grid(row=9, column=0)
         self.ignoreListEntry = tk.Entry(x)
-        self.ignoreListEntry.grid(row=9, column=0)
+        self.ignoreListEntry.grid(row=10, column=0)
         
 
         for i in range(3):
@@ -83,7 +93,8 @@ class SummarizerFrame(tk.Frame):
             self.canvasList.append(PlotCanvas.PlotCanvas(x, bg="white",
                                                          plotRangeX=[0,1],plotRangeY=[0,1],
                                                          height=200, width=400,
-                                                         marginX=60, marginY=25))
+                                                         marginX=60, marginY=25,
+                                                         objectClickHandler=self.objectClickHandler))
             self.canvasList[i*2].draw_xAxis(timeFormat=None, optimalTicks=5)
             self.canvasList[i*2].grid(row=i*2, column=1)
 
@@ -100,7 +111,9 @@ class SummarizerFrame(tk.Frame):
             self.canvasList.append(PlotCanvas.PlotCanvas(x, bg="white",
                                                          plotRangeX=[0,1],plotRangeY=[0,1],
                                                          height=200, width=600,
-                                                         marginX=60, marginY=25))
+                                                         marginX=60, marginY=25,
+                                                         selectionHandler = self.change_timeWindow,
+                                                         objectClickHandler=self.objectClickHandler))
             self.canvasList[i*2+1].draw_xAxis(timeFormat=None, optimalTicks=8)
             self.canvasList[i*2+1].grid(row=i*2, column=3)
 
@@ -122,7 +135,7 @@ class SummarizerFrame(tk.Frame):
         self.plotSummary(self.summary)
         
 
-    def readPicarroPeek(self):
+    def readPicarroPeek(self, timeWindow=None):
         pDat=[]
         with open("../temp/picarro.log", "r") as pf:
             for line in pf:
@@ -130,29 +143,38 @@ class SummarizerFrame(tk.Frame):
                 if firstChar in ["#","t"]:
                     continue
                 sl = line.split("\t")
-                pDat.append([int(sl[0]), int(sl[1]), float(sl[2]), float(sl[3])])
+
+                t = int(sl[0])
+                if timeWindow and ((t<timeWindow[0] ) or (t>timeWindow[1])):
+                    continue
+                
+                pDat.append([t, int(sl[1]), float(sl[2]), float(sl[3])])
         self.latestPicarroPeekRead+=1
         return pDat
         
 
-    def update(self):
-        self.endTimeEntry.delete(0,"end")
-        self.endTimeEntry.insert(0,support.nowString())
+   # def update(self):
+    #    self.endTimeEntry.delete(0,"end")
+     #   self.endTimeEntry.insert(0,support.nowString())
+      #  self.after(500, self.update)
 
-        #if not self.childProcess is None:
-            
+    def plotRawData(self):
+        print(self.timeWindow)
 
-        #if self.latestPicarroPeekRead < self.latestPicarroPeek:
+        hours = float(self.timeWindowSelection.get())
+        pDat = request_picarroDat(hours, self.conf["rawLogSearchPaths"], timeWindow=self.timeWindow)
 
-         #   hours = float(self.timeWindowSelection.get())
-          #  pDat = self.readPicarroPeek()
-           # summary = self.summarize(pDat, hours)
-            
-            #self.plotSummary(summary)
+        print(len(pDat))
 
-        self.after(500, self.update)
+        columns = ["time", "H2O", "d18O", "d2H"]
 
-    def plotSummary(self, summary=None):
+        ###########
+        # add code to plot the raw data time series
+        ##############
+
+        print(pDat[:10])
+
+    def plotSummary(self, summary=None, selectionInterval=None):
 
         if summary is None:
             summary = self.summary
@@ -161,43 +183,68 @@ class SummarizerFrame(tk.Frame):
         
         for i in range(len(self.canvasList)):
 
-            labels = list()
-            xVals = list()
-            yVals = list()
-            timestamps=list()
+            labels    = list()            
+            xVals     = list()
+            yVals     = list()            
+            timestamps= list()
+            sizeVals  = list()
+            lwdVals   = list()            
+            selID = None
 
             ix = self.parListboxLabelX[i].activeIndex
             iy = self.parListboxLabelY[i].activeIndex           
 
             for val in summary["data"]:
                 if val[0] in ["xxx"]+ignoreList: continue
+
+                if selectionInterval:
+                    if val[1] < selectionInterval[0] or val[1] > selectionInterval[1]:
+                        continue
+                
                 labels.append(val[0])
                 timestamps.append(val[1])
                 xVals.append(val[ix+1])
                 yVals.append(val[iy+1])
 
-            if not summary["columns"][ix+1]=="time": timeFormat = None
-            else: timeFormat="%H:%M"
+                lwdVals.append(1)
+
+                if self.selection and val[0] == self.selection["ID"]:
+                    selID = self.selection["ID"]
+                    sizeVals.append(9)                    
+                    if self.selection["time"] == "%d"%val[1]:
+                        lwdVals[-1] = 3
+                else:
+                    sizeVals.append(5)
+
+            
+            timeFormat = "%H:%M" if summary["columns"][ix+1]=="time" else None
+           
+
             self.canvasList[i].draw_xAxis(plotRangeX=[min(xVals), max(xVals)], timeFormat=timeFormat, precision=0, optimalTicks=5)
             self.canvasList[i].draw_yAxis(plotRangeY=[min(yVals), max(yVals)], optimalTicks=5, precision=0)
+            self.canvasList[i].plotLine(-40,-310,40,330, tag="GMWL")
             
             cols=[]
+            borderCols = []
             labs=[]
             labCols=[]
+            labSize=[]
             uLabels = support.unique(labels)
-            for l in labels:
+            for n,l in enumerate(labels):
                 cols.append(colors[uLabels.index(l)])
+                borderCols.append(invert_color(cols[n]) if lwdVals[n]>1 else "#000000")
                 if not l in labs:
                     labs.append(l)
                     labCols.append(cols[-1])
+                    labSize.append(8 if l==selID else 5)
             
         
-            self.canvasList[i].plotPoints(xVals,yVals,cols, idTag = labels, timestamp=timestamps)
+            self.canvasList[i].plotPoints(xVals,yVals,cols, idTag = labels, timestamp=timestamps, size=sizeVals, lwd=lwdVals, borderCol=borderCols)
 
         self.legendCanvas.plotRangeY = [0,len(labs)]
         self.legendCanvas.plotPoints(x=[0.05 for a in range(len(labs))],
                                      y=list(range(len(labs),-1,-1)),
-                                     col=labCols, labels=labs, labelOffsets=[30,0])
+                                     col=labCols, labels=labs, labelOffsets=[10,0], size=labSize)
 
     def summarize(self, pDat, timeWindow_in_hours):
         
@@ -247,6 +294,44 @@ class SummarizerFrame(tk.Frame):
 
             
         return({"columns":["ID","time","fTime","mTime","H2O","d18O","d2H"], "data":res})
+
+
+    def plot_selection(self):
+    
+        if self.currentSelection is None:            
+            return
+
+        for plot in self.canvasList:
+                    
+            plot = self.parCanvas[n]
+            lineCol = self.get_colors(status, strongCol=False)["line"]
+            plot.delete("selection")
+            plot.vertLines(self.currentSelection["interval"],tag = "selection", color=lineCol, width=2)
+
+    def objectClickHandler(self, ID, time):
+        self.selection = {"ID":ID, "time":time}
+        #print(self.selection)
+        self.plotSummary(selectionInterval = self.timeWindow)
+            
+
+    def change_timeWindow(self, selectionInterval, button="left"):       
+
+        # on right button click, discard current selection
+        if button == "right" or selectionInterval is None:
+            self.timeWindow = None
+
+        else:
+        
+            try:
+                selectionInterval.sort()
+            except:
+                return            
+            
+            if (selectionInterval[1] - selectionInterval[0]) > 3600:                                
+                self.timeWindow = selectionInterval.copy()
+
+        self.plotSummary(selectionInterval = self.timeWindow)        
+        
 
 if __name__ == "__main__":
     if 1:

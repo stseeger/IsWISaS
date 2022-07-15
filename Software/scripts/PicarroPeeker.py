@@ -2,27 +2,20 @@ import LogFileReader
 import os
 import datetime
 import time
-#import rdp
 
-
-def peek(timeWindow_in_hours = 24, logDir = "C:/UserData/DataLog_User"):
-
-    print('x')
+#def peek(backwardsHours = 24, logDir = "D:/Seeger/picarroLogs/2140"):
+def peek(backwardsHours = 24, logDir = "C:/UserData/DataLog_User", timeWindow=None):
 
     configFile = "../config/logDescriptors/picarroLxxxx-i.lgd"
-
-    
     lfr = LogFileReader.Reader(configFile, logDir, "?", fillBuffer=False)
-                
     logFiles = lfr.list_logFiles(lfr.conf['logFilePattern'],logDir)
 
-    
-
+    #print("~~~~~~~~~")
+    #print(logDir)
+    #print(logFiles)
 
     timeFormatString = "%Y-%m-%d %H:%M:%S"
-    #timeFormatString = "%Y-%m-%d %H:%M:%S"
-
-    columns = ["DATE","TIME","H2O","Delta_18_16", "Delta_D_H"]
+    columns = ["DATE","TIME","H2O", "Delta_18_16", "Delta_D_H",  "Delta_17_16"]
     indexDict = {}
 
     full_times = []
@@ -36,8 +29,11 @@ def peek(timeWindow_in_hours = 24, logDir = "C:/UserData/DataLog_User"):
     lastTime = None
     timeSpan = 0
 
-    while timeSpan < timeWindow_in_hours*3600:
-        print("process %d \"%s\""%(fileIndex,logFiles[fileIndex]))
+    #while timeSpan < backwardsHours*3600:    
+
+    while (fileIndex>=0) and (timeWindow is None or firstTime is None or firstTime > timeWindow[0]):
+
+        print("process \"%s\""%logFiles[fileIndex])
         with open(logDir+'/'+logFiles[fileIndex]) as f:
 
             times = []
@@ -64,41 +60,48 @@ def peek(timeWindow_in_hours = 24, logDir = "C:/UserData/DataLog_User"):
                     
                     i = indexDict["H2O"]
                     valueH2O = int(float(line[i:i+20].strip()))
-                    i = indexDict["Delta_18_16"]
-                    value18O = round(float(line[i:i+20].strip()),2)
-                    i = indexDict["Delta_D_H"]
-                    value2H = round(float(line[i:i+20].strip()),2)
 
-                    valPairs.append([posixTime, valueH2O, value18O,value2H])
+                    i = indexDict["Delta_18_16"]
+                    value18O = round(float(line[i:i+20].strip()),2)  
+
+                    i = indexDict["Delta_D_H"]
+                    value2H = round(float(line[i:i+20].strip()),2)                                      
+
+                    i = indexDict["Delta_17_16"]
+                    if i > 0:
+                        value17O = round(float(line[i:i+20].strip()),2)
+                        valPairs.append([posixTime, valueH2O, value18O, value2H, value17O])
+                    else:
+                        valPairs.append([posixTime, valueH2O, value18O, value2H])
+
+                    
                 except:
                     pass
 
-        full_valPairs = valPairs + full_valPairs
+        full_valPairs = valPairs + full_valPairs        
+        timeSpan = full_valPairs[-1][0] - full_valPairs[0][0]
 
-        timeSpan = full_valPairs[-1][0] - full_valPairs[0][0]   
-        
-        #if(fileIndex==236): break
 
+        if timeWindow is None:
+            timeWindow = [full_valPairs[-1][0] - backwardsHours*3600, full_valPairs[-1][0]]
+
+        firstTime = full_valPairs[0][0]        
         fileIndex-=1
 
     return full_valPairs
 
 if __name__ == "__main__":
 
-    full_valPairs = peek()
-
-    # use Ramer-Douglas-Peucker algorithm to simplify the time series
-    #print("original # of data points:",len(full_valPairs))
-    #print("reduce number of data points...")
-    simple = full_valPairs#rdp.rdp(full_valPairs, epsilon=50)
-    #print("reduced # of data points:",len(simple))
-
-    baseTime = 0#full_valPairs[0][0]
-
-    fileTimeStamp = "%s.log"%(logFiles[-1].split('/')[-1].split('-')[1])
-
-    with open("../temp/recentH2O.log", "w") as f:
-        f.write("#"+fileTimeStamp+'\n')
-        f.write("time\tH2O\tdelta18O\tdeltaD\n")
-        f.write("\n".join(map(lambda x: "%.0f\t%d\t%.2f\t%.2f"%(x[0]-baseTime,x[1],x[2],x[3]), simple)))
-        f.write("\n")
+    peekDat = peek()
+    if len(peekDat[0]) == 5:
+        with open("../temp/recentH2O.log", "w") as f:
+            f.write("#%d"%time.time()+'\n')
+            f.write("time\tH2O\tdelta18O\tdeltaD\tdelta17O\n")
+            f.write("\n".join(map(lambda x: "%.0f\t%d\t%.2f\t%.2f\t%.2f"%(x[0],x[1],x[2],x[3],x[4]), peekDat)))
+            f.write("\n")
+    else:
+        with open("../temp/recentH2O.log", "w") as f:
+            f.write("#%d"%time.time()+'\n')
+            f.write("time\tH2O\tdelta18O\tdeltaD\n")
+            f.write("\n".join(map(lambda x: "%.0f\t%d\t%.2f\t%.2f"%(x[0],x[1],x[2],x[3]), peekDat)))
+            f.write("\n")

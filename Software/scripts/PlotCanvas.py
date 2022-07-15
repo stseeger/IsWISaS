@@ -12,7 +12,7 @@ for y in range(-4,7):
 possibleTimeSpacings = [1, 10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 21600, 86400, 172800, 432000, 2592000, 15552000]
 
 class PlotCanvas(tk.Canvas):
-    def __init__(self,master, plotRangeX, plotRangeY, marginX=62, marginY=20, axes=True, selectionHandler = None, YPrecision=1, *args,**kwargs):
+    def __init__(self,master, plotRangeX, plotRangeY, marginX=62, marginY=20, axes=True, selectionHandler = None, objectClickHandler=None, YPrecision=1, *args,**kwargs):
         super(PlotCanvas,self).__init__(master=master,*args,**kwargs)
 
         self.pxWidth = int(self.cget("width"))
@@ -26,6 +26,7 @@ class PlotCanvas(tk.Canvas):
         self.precisionY = YPrecision
 
         self.selectionHandler = selectionHandler
+        self.objectClickHandler = objectClickHandler
 
         self.selection = {"left":[None,None], "right":[None,None]}
         self.lastMouseButton = None
@@ -49,7 +50,7 @@ class PlotCanvas(tk.Canvas):
 
     #---------selection-------
     def objectClick(self, event):
-        self.selectionHandler=None
+        #self.selectionHandler=None
 
         item = self.find_closest(event.x, event.y)
         tags = self.itemcget(item, "tags").split(' ')
@@ -69,8 +70,11 @@ class PlotCanvas(tk.Canvas):
 
         if ID is None:
             ID = "none"
-            
-        print(ID +':'+ time)
+
+        if self.objectClickHandler is None:
+            print(ID +':'+ time)
+        else:
+            self.objectClickHandler(ID, time)
         
 
         
@@ -269,11 +273,25 @@ class PlotCanvas(tk.Canvas):
         if labelXoffset:
             self.create_text(self.getX(x[-1])-labelXoffset, self.getY(y[-1])-10,text = y[-1], fill = color, tags=tag)
 
-    def plotPoints(self, x, y, col, labels=None, labelOffsets=[0,0], idTag=None, timestamp=None, tag="points", size=5):
+    def plotLine(self, x0, y0, x1, y1, tag="line"):
+        self.delete(tag)
+        self.create_line(self.getX(x0),self.getY(y0),self.getX(x1),self.getY(y1), width=1, tag=tag)
+        
+
+    def plotPoints(self, x, y, col, labels=None, labelOffsets=[0,0], idTag=None, timestamp=None, tag="points", size=5, lwd=1, borderCol="#000000"):
         self.delete(tag)
 
         if not isinstance(col, list):
             col = [col for i in range(len(x))]
+
+        if not isinstance(borderCol, list):
+            borderCol = [borderCol for i in range(len(x))]
+
+        if not isinstance(size, list):
+            size = [size for i in range(len(x))]
+
+        if not isinstance(lwd, list):
+            lwd = [lwd for i in range(len(x))]
 
         if idTag is None:
             idTag = labels
@@ -285,14 +303,14 @@ class PlotCanvas(tk.Canvas):
             if not timestamp is None:
                 tags = tags + ["time:%.0f"%timestamp[i]]
             
-            self.create_rectangle(self.getX(x[i])-size, self.getY(y[i])-size,
-                                  self.getX(x[i])+size, self.getY(y[i])+size,
-                                  fill=col[i], tags=tags)
+            self.create_rectangle(self.getX(x[i])-size[i], self.getY(y[i])-size[i],
+                                  self.getX(x[i])+size[i], self.getY(y[i])+size[i],
+                                  fill=col[i], tags=tags, width=lwd[i], outline=borderCol[i])
 
             if not labels is None:                
                 tags = tags + ["ID:"+labels[i]]
                 self.create_text(self.getX(x[i])+labelOffsets[0],
-                                 self.getY(y[i])+labelOffsets[1], text=labels[i], tags=tags)
+                                 self.getY(y[i])+labelOffsets[1], text=labels[i], tags=tags, anchor='w')
 
     def on_resize(self, width, height):
         self.pxWidth = width

@@ -83,7 +83,7 @@ def scan_serialPorts(baudRate = [1200,9600], cachePath = None, refresh_cache = F
 
 def find_device(name, baudRate = [1200, 9600], cachePath = None):
     
-    deviceDict, portDict = scan_serialPorts(baudRate, cachePath)
+    deviceDict, portDict = scan_serialPorts(baudRate, cachePath)    
 
     if name in deviceDict.keys():
         return deviceDict[name]
@@ -121,9 +121,10 @@ class SerialDevice:
                
                 for attempt in range(3):                                                        
                     deviceMessage = self.identify()
+                    print(deviceMessage)
                     if len(deviceMessage) > 2:
                         break
-                    time.sleep(0.1)                
+                    time.sleep(0.5)                
                 
                 if len(deviceMessage) >= 3 and (deviceMessage[0] == "?" or deviceMessage[1]== "?"):                        
                         if deviceMessage[1]== "?":

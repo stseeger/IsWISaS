@@ -5,8 +5,11 @@
 #define MODEL "C"
 #define VERSION "0.4"
 
-#define VALVE_UPDATE_INTERVAL 1000
-unsigned int latestValveUpdate;
+#define INPUT_BUFFER_SIZE 32
+char inputBuffer[INPUT_BUFFER_SIZE];
+char boxBuffer[3];
+char slotBuffer[3];
+char checksumBuffer[3];
 
 /*-----( Declare Constants and Pin Numbers )-----*/
 #define portOne_RX 12  //Serial Receive pin
@@ -29,12 +32,16 @@ struct valveSlotType{
   byte slot;  
 };
 
+//----------------------------------------
+
+
+
 //------- valve control stuff ----------------
 #define VALVE_COUNT 8
 int valvePins[VALVE_COUNT] = {9, 8, 7, 10, 11, 4, 3, 2};
 
 valveSlotType primaryValve   = {1,1};
-valveSlotType groupValve     = {0,1};
+valveSlotType groupValve     = {0,0};
 
 //.........................................
 valveSlotType parse_valveSlot(char *arg){
@@ -65,39 +72,27 @@ void update_valves(){
                                    ((groupValve.box==0)     & (i == groupValve.slot-1)));
   }  
 
-  digitalWrite(portOne_EN, HIGH);
-  delay(50);
-  portOne.print("valve ");
-  portOne.print(primaryValve.box);
-  portOne.print('#');
-  portOne.print(primaryValve.slot);
-  portOne.print(' ');
-  portOne.print(groupValve.box);
-  portOne.print('#');
-  portOne.print(groupValve.slot);
-  portOne.print("\r\n");
-  portOne.flush();
-  digitalWrite(portOne_EN, LOW);
-
-  digitalWrite(portTwo_EN, HIGH);
-  delay(50);
-  portTwo.print("valve ");
-  portTwo.print(primaryValve.box);
-  portTwo.print('#');
-  portTwo.print(primaryValve.slot);
-  portTwo.print(' ');
-  portTwo.print(groupValve.box);
-  portTwo.print('#');
-  portTwo.print(groupValve.slot);
-  portTwo.print("\r\n");
-  portTwo.flush();
-  digitalWrite(portTwo_EN, LOW);
-
-  latestValveUpdate = millis();  
+  
+  SoftwareSerial SWSPort[2] = {portOne, portTwo};
+  int SWS_EN_PIN[2] = {portOne_EN, portTwo_EN};
+  
+  for(byte n=0; n<2; n++){
+    digitalWrite(SWS_EN_PIN[n],HIGH);
+    delay(50);
+    SWSPort[n].print("valve ");
+    SWSPort[n].print(primaryValve.box);
+    SWSPort[n].print('#');
+    SWSPort[n].print(primaryValve.slot);
+    SWSPort[n].print('#');
+    SWSPort[n].print(groupValve.box);
+    SWSPort[n].print('#');
+    SWSPort[n].println(groupValve.slot);
+    digitalWrite(SWS_EN_PIN[n],LOW);   
+ } 
 }
 
 //.........................................
-void get_activeValve(){
+void get_activeValve(){  
   Serial.print("valve>");
   Serial.print(primaryValve.box);
   Serial.print('#');
@@ -145,9 +140,74 @@ void measure_anaPins(){
   
 }
 
+void open_RS485(byte port){
+  if(port==1){
+    digitalWrite(portOne_EN,HIGH);    
+  }
+  if(port==2){
+    digitalWrite(portTwo_EN,HIGH);
+  }
+  delay(50);
+}
+
+void close_RS485(byte port){
+  if(port==1){
+    digitalWrite(portOne_EN,LOW);    
+  }
+  if(port==2){
+    digitalWrite(portTwo_EN,LOW);
+  }
+}
+
+byte get_RS485Response(byte portNumber){
+  byte responseLength=0;
+  if(portNumber==1){      
+      responseLength = portOne.readBytesUntil('\0',inputBuffer,INPUT_BUFFER_SIZE-1); 
+  }
+  if(portNumber==2){
+    responseLength = portTwo.readBytesUntil('\0',inputBuffer,INPUT_BUFFER_SIZE-1);
+  }
+
+  if(responseLength){
+    inputBuffer[responseLength-1]='\0';
+    byte offset=0;
+    for(byte i=0; i<responseLength;i++){
+      if(inputBuffer[offset]=='<') break;
+      offset++;
+    }    
+    Serial.println(inputBuffer+offset);
+    inputBuffer[0]='\0';
+  }else{
+    Serial.println("< x");
+  } 
+
+   return responseLength;
+}
+
+
+
 //==========================================
 
 void cmd_identify(int arg_cnt, char **args){
+
+  byte targetID = 0;
+  if(arg_cnt>1) targetID = atoi(args[1]);
+
+  if(targetID){
+    SoftwareSerial SWSPort[2] = {portOne, portTwo};
+    byte responseLength = 0;
+    for(byte i=0; i<2; i++){
+      open_RS485(i+1);
+        SWSPort[i].print("? ");
+        SWSPort[i].println(targetID);
+      close_RS485(i+1);
+      delay(20);
+      responseLength = get_RS485Response(i+1);
+      if(responseLength) break;
+    }
+    return;
+  }
+  
   Serial.print(DEVICE);
   Serial.print(' ');
   Serial.print(MODEL);
@@ -156,7 +216,34 @@ void cmd_identify(int arg_cnt, char **args){
 }
 
 //......................................
+void cmd_scan(int arg_cnt, char **args){
+  
+  byte boxID = 0;
+  
+  if(arg_cnt==2){
+    boxID =  atoi(args[1]);
+  }  
 
+  if(boxID==0){    
+    Serial.print(VALVE_COUNT);
+    Serial.print(";");
+    Serial.println(VALVE_COUNT);
+    return;
+  }  
+
+  SoftwareSerial SWSPort[2] = {portOne, portTwo};
+  byte responseLength = 0;
+  for(byte i=0; i<2; i++){
+    open_RS485(i+1);
+    SWSPort[i].print("?? ");
+    SWSPort[i].println(boxID);
+    close_RS485(i+1);
+    delay(20);
+    responseLength = get_RS485Response(i+1);
+    if(responseLength) break;
+  }
+}
+//......................................
 void cmd_valve(int arg_cnt, char **args){
 
   // in case no second argument was passed, just print the active valve
@@ -172,6 +259,35 @@ void cmd_valve(int arg_cnt, char **args){
   update_valves();  
 }
 
+//........................................
+void cmd_test(int arg_cnt, char **args){
+  
+  if(arg_cnt > 1){
+    byte targetID = atoi(args[1]);
+    if(targetID){      
+      SoftwareSerial SWSPort[2] = {portOne, portTwo};      
+      for(byte i=0; i<2; i++){
+        open_RS485(i+1);
+          SWSPort[i].print("test ");
+          SWSPort[i].println(targetID);
+        close_RS485(i+1);
+      }      
+      return;
+    } 
+  }  
+  
+  valveSlotType backupPrimaryValve = {primaryValve.box, primaryValve.slot};
+  primaryValve.box=16;
+
+    for(byte n=0; n<VALVE_COUNT; n++){    
+      primaryValve.slot=(n+1);
+      update_valves();
+      delay(500);
+    }
+
+   primaryValve.box = backupPrimaryValve.box;
+   primaryValve.slot = backupPrimaryValve.slot;
+}
 //........................................
 
 void cmd_flow(int arg_cnt, char **args){
@@ -206,6 +322,8 @@ void cmd_flow(int arg_cnt, char **args){
 void setup() {
   cmdInit(9600);  
   cmdAdd("?", cmd_identify);
+  cmdAdd("??", cmd_scan);
+  cmdAdd("test", cmd_test);
   cmdAdd("valve", cmd_valve);
   cmdAdd("flow", cmd_flow);  
 
@@ -224,15 +342,11 @@ void setup() {
   
   update_valves();
   cmd_identify(0,NULL);
+  Serial.print(">> ");
 }
 
 //------------------------------
 
 void loop() {
   cmdPoll();
-  
-  // regularly update the valves in case any extension has missed something
-  /*if((millis() - latestValveUpdate) > VALVE_UPDATE_INTERVAL){
-    update_valves();
-  }*/
 }
