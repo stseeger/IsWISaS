@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import filedialog
 import time
 import datetime
 import os
@@ -49,6 +50,7 @@ class SummarizerFrame(tk.Frame):
         self.childProcess = None
         self.timeWindow = None
         self.selection = None
+        self.summary = None
         
         self.options = options
 
@@ -79,9 +81,12 @@ class SummarizerFrame(tk.Frame):
         bRawDat = tk.Button(x, text="Raw data", command = self.plotRawData)
         bRawDat.grid(row=8,column=0)
 
-        tk.Label(x, text="IgnoreList").grid(row=9, column=0)
+        bExport = tk.Button(x, text="Export", command = self.export_data)
+        bExport.grid(row=9,column=0)
+
+        tk.Label(x, text="IgnoreList").grid(row=10, column=0)
         self.ignoreListEntry = tk.Entry(x)
-        self.ignoreListEntry.grid(row=10, column=0)
+        self.ignoreListEntry.grid(row=11, column=0)
         
 
         for i in range(3):
@@ -295,6 +300,25 @@ class SummarizerFrame(tk.Frame):
             
         return({"columns":["ID","time","fTime","mTime","H2O","d18O","d2H"], "data":res})
 
+
+    def export_data(self):
+        filepath = filedialog.asksaveasfilename(defaultextension="csv")
+
+        if not len(filepath): return        
+
+        datColumns = [self.summary["columns"].index(x) for x in ["d18O","d2H","H2O"]]
+        timeColumn = self.summary["columns"].index('time')
+        
+
+        with open(filepath, 'w') as f:
+            f.write(';'.join(["Sample","d18O","d2H","H2O","Date","Note","Origin"])+'\n')
+            for line in self.summary["data"]:                
+                f.write(';'.join([str(line[i]) for i in [0]+datColumns]\
+                            +[support.secs2String(line[timeColumn],"%Y-%m-%d"),'','VapAuSa'])\
+                        +'\n')
+        
+        
+        
 
     def plot_selection(self):
     
