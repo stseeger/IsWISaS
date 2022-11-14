@@ -358,7 +358,7 @@ class ProbeSequencer():
         try:
             alarmed = self.picarroInfo["H2O"] > self.conf["H2O_Alert"]
         except:
-            alarmed = self._flushing
+            alarmed = False
         
         return alarmed or self._alarmed
 
