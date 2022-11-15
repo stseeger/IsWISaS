@@ -364,8 +364,9 @@ class Reader():
         while fine:
             lastPos = f.tell()
             rawLine = f.readline()
-            #print(rawLine)
             try:
+                if not ord(rawLine[-1]) in [10,13]:
+                    raise Exception("incomplete last log file line")
                 entry = self.parse_logFileLine(rawLine)
                 dataBuffer.add(entry.data, entry.time)               
             except:
