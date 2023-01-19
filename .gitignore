@@ -3,3 +3,5 @@ Software/scripts/__pycache__/
 Software/temp/
 *.pyc
 *.pyc
+Software/config/valve.cfg
+Software/log/valves.log
