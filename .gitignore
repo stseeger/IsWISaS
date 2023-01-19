@@ -5,3 +5,5 @@ Software/temp/
 *.pyc
 Software/config/valve.cfg
 Software/log/valves.log
+Software/config/valve.cfg
+Software/log/valves.log
