@@ -388,7 +388,7 @@ class ProbeSequencer():
         if timeoutFun():
             return const.SWITCH_TIMEOUT
 
-        if optimumFun():
+        if optimumFun() and self.conf["autoSwitchEnable"]:
             return const.SWITCH_OPTIMUM
 
         return 0
