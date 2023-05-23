@@ -2,7 +2,7 @@
 
 #define DEVICE "IsWISaS_Extension"
 #define MODEL "C"
-#define VERSION "1.2"
+#define VERSION "1.2extra"
 
 #define RS485_BAUDRATE 1200
 #define RS485_MODE_CONTROL_PIN 13
@@ -13,19 +13,27 @@ char inputBuffer[INPUT_BUFFER_SIZE];
 #define VALVE_COUNT 8
 const int valvePins[VALVE_COUNT] = {2, 3, 4, 5, 6, 7, 8, 9};
 
+#define DRAIN_VALVE_A 12
+#define DRAIN_VALVE_B A0
+#define DRAIN_MILLISECONDS 5000
+
 #define ID_PIN A3
 #define ANALOG_ID_TOLERANCE 7
 #define ID_TABLE_SIZE 16
 const int analogIdVals[ID_TABLE_SIZE] = {   0,  45,  90, 129, 182, 214, 245, 272,
                                           330, 352, 374, 393, 420, 436, 453, 468};
-
+                                          
 struct valveSlotType{
   byte box;
   byte slot;  
 };
 
+unsigned long drainStart=0;
+bool drainTriggerSet = false;
+
 valveSlotType primaryValve   = {0,9};
 valveSlotType secondaryValve = {0,0};
+
 byte id = 0;
 
 //--------------------------------------------
@@ -48,6 +56,27 @@ void update_valves(){
         digitalWrite(valvePins[i], ((primaryValve.box == id)   & (i == primaryValve.slot-1)) |
                                    ((secondaryValve.box == id) & (i == secondaryValve.slot-1)));
   }
+
+  if((primaryValve.box==id & primaryValve.slot==VALVE_COUNT) |
+     (secondaryValve.box==id & secondaryValve.slot==VALVE_COUNT)){
+    drainTriggerSet=true;
+  }
+  
+  if(drainTriggerSet & !((primaryValve.box==id | secondaryValve.box==id))){                         
+    drainStart=millis();
+    drainTriggerSet = false;
+  }
+
+  if(drainStart>0){
+    unsigned long timeDiff = millis() - drainStart;
+    digitalWrite(DRAIN_VALVE_A, timeDiff < DRAIN_MILLISECONDS);
+    digitalWrite(DRAIN_VALVE_B, (timeDiff > DRAIN_MILLISECONDS) & (timeDiff < 2*DRAIN_MILLISECONDS));
+    if(timeDiff > 2*DRAIN_MILLISECONDS) drainStart=0;
+  }else{
+    digitalWrite(DRAIN_VALVE_A, LOW);
+    digitalWrite(DRAIN_VALVE_B, LOW);
+  }
+  
 }
 //--------------------------------------------
 valveSlotType parse_valveSlot(char *arg){
@@ -77,13 +106,10 @@ void cmd_valve(int arg_cnt, char **args){
   if(arg_cnt < 2){    
     return;
   }
-
   primaryValve = parse_valveSlot(args[1]);
 
   if(arg_cnt >2)
     secondaryValve = parse_valveSlot(args[2]);
-  
-  update_valves();
 }
 //--------------------------------------------
 void cmd_identify(int arg_cnt, char **args){
@@ -91,9 +117,7 @@ void cmd_identify(int arg_cnt, char **args){
   Serial.print(" ");
   Serial.print(MODEL);
   Serial.print(" ");
-  Serial.print(VERSION);  
-  Serial.print(" ");
-  Serial.println(get_id());  
+  Serial.println(VERSION);
 }
 //--------------------------------------------
 void RS485Poll(){
@@ -131,6 +155,11 @@ void setup()
     pinMode(valvePins[i], OUTPUT);    
     digitalWrite(valvePins[i], LOW);
   }
+  pinMode(DRAIN_VALVE_A,OUTPUT);
+  pinMode(DRAIN_VALVE_B,OUTPUT);
+  digitalWrite(DRAIN_VALVE_A, LOW);
+  digitalWrite(DRAIN_VALVE_B, LOW);
+  
 
   cmd_identify(0,NULL);
  
@@ -144,7 +173,7 @@ void loop()
     RS485Poll();
     update_valves();
   }else{
-    for(byte n=0; n<8; n++){
+    for(byte n=0; n < VALVE_COUNT; n++){
         for(byte i=0; i < VALVE_COUNT; i++){
           digitalWrite(valvePins[i], i==n);
       }

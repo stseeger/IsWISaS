@@ -21,10 +21,10 @@ def invert_color(hexString):
         
 
 def request_picarroDat(backwardsHours, pLogDirs, endTime=None, timeWindow=None):
-    if endTime is None:
+    if endTime is None:        
         endTime = time.time()
-
-    print(pLogDirs)
+    timeWindow = [endTime-backwardsHours*3600, endTime]
+    
 
     for path in [pLogDirs[1]]:
         try:
@@ -45,6 +45,7 @@ class SummarizerFrame(tk.Frame):
         self.canvasList = []
         self.parListboxLabelX = []
         self.parListboxLabelY = []
+        self.ttpList = []
         self.latestPicarroPeek = -1
         self.latestPicarroPeekRead = -1
         self.childProcess = None
@@ -95,6 +96,7 @@ class SummarizerFrame(tk.Frame):
             x.grid(row=i, column=0, sticky="nsew",pady=0)
             self.rowconfigure(i, weight=1)
             
+            #--- left sub plot of row i---
             self.canvasList.append(PlotCanvas.PlotCanvas(x, bg="white",
                                                          plotRangeX=[0,1],plotRangeY=[0,1],
                                                          height=200, width=400,
@@ -113,6 +115,7 @@ class SummarizerFrame(tk.Frame):
             self.parListboxLabelX[i*2].grid(row=i*2+1,column=1, sticky = 'we')
 
             
+            #--- right sub plot of row i---
             self.canvasList.append(PlotCanvas.PlotCanvas(x, bg="white",
                                                          plotRangeX=[0,1],plotRangeY=[0,1],
                                                          height=200, width=600,
@@ -120,7 +123,10 @@ class SummarizerFrame(tk.Frame):
                                                          selectionHandler = self.change_timeWindow,
                                                          objectClickHandler=self.objectClickHandler))
             self.canvasList[i*2+1].draw_xAxis(timeFormat=None, optimalTicks=8)
-            self.canvasList[i*2+1].grid(row=i*2, column=3)
+            self.canvasList[i*2+1].grid(row=i*2, column=3)            
+
+            self.ttpList.append(ExtraWidgets.ToolTip(self.canvasList[i*2+1], "info%d"%i, 0))
+            self.canvasList[i*2+1].bind("<Motion>", self.updateToolTip)
 
             self.parListboxLabelY.append(ExtraWidgets.ListboxLabel(x, self.options,i+3, width=5))
             self.parListboxLabelY[i*2+1].grid(row=i*2,column=2, sticky = 'we')
@@ -128,14 +134,18 @@ class SummarizerFrame(tk.Frame):
             self.parListboxLabelX.append(ExtraWidgets.ListboxLabel(x, self.options,0))
             self.parListboxLabelX[i*2+1].grid(row=i*2+1,column=3, sticky = 'we')
 
-            
-
             self.update()
+
+    def updateToolTip(self, event):
+        time = support.secs2String(self.canvasList[1].get_time(event), "%Y-%m-%d %H:%M:%S")
+        
+        for ttp in self.ttpList:
+            ttp.text = time
 
     def triggerPicarroPeek(self):
 
-        hours = float(self.timeWindowSelection.get())
-        pDat = request_picarroDat(hours, self.conf["rawLogSearchPaths"])
+        hours = float(self.timeWindowSelection.get())        
+        pDat = request_picarroDat(hours, self.conf["rawLogSearchPaths"], endTime = support.string2Secs(self.endTimeEntry.get()))
         self.summary = self.summarize(pDat, hours)
         self.plotSummary(self.summary)
         
@@ -154,7 +164,7 @@ class SummarizerFrame(tk.Frame):
                     continue
                 
                 pDat.append([t, int(sl[1]), float(sl[2]), float(sl[3])])
-        self.latestPicarroPeekRead+=1
+        self.latestPicarroPeekRead+=1        
         return pDat
         
 
@@ -314,7 +324,7 @@ class SummarizerFrame(tk.Frame):
             f.write(';'.join(["Sample","d18O","d2H","H2O","Date","Note","Origin"])+'\n')
             for line in self.summary["data"]:                
                 f.write(';'.join([str(line[i]) for i in [0]+datColumns]\
-                            +[support.secs2String(line[timeColumn],"%Y-%m-%d"),'','VapAuSa'])\
+                            +[support.secs2String(line[timeColumn],"%Y-%m-%d"),'','IsWISaS.Summary'])\
                         +'\n')
         
         
