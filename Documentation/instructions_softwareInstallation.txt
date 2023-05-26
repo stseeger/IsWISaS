@@ -1,0 +1,22 @@
+Install the CH34x Serial driver:
+https://www.dropbox.com/s/80woki2fxfcg81h/CH34x_Install_Windows_v3_4.EXE
+
+Install Arduino IDE (optional but recommended):
+https://www.arduino.cc/en/software
+
+Install Python 3:
+https://www.python.org/downloads/
+
+Install the pySerial module:
+(python should be the path to a working python 3 installation)
+python -m pip install pyserial
+
+Extract the IsWISaS-Archive to your Picarro's Desktop
+https://www.dropbox.com/s/7nu55aqdboff9o0/IsWISaS.zip
+
+create a link to the IsWISaS_GUI:
+  right click on your desktop -> New -> shortcut
+Target:   <path to your python3 executable> GUI_IsWISaS.py
+Start in: <path to your Desktop>\IsWISaS\Software\scripts
+
+
