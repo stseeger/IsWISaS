@@ -1,4 +1,5 @@
 #include "src/CmdArduino//Cmd.h"
+#include <EEPROM.h>
 
 #define DEVICE "IsWISaS_Extension"
 #define MODEL "C"
@@ -15,7 +16,8 @@ const int valvePins[VALVE_COUNT] = {2, 3, 4, 5, 6, 7, 8, 9};
 
 #define DRAIN_VALVE_A 12
 #define DRAIN_VALVE_B A0
-#define DRAIN_MILLISECONDS 5000
+#define DRAIN_SECONDS_ADDRESS 0
+unsigned int drainSeconds;
 
 #define ID_PIN A3
 #define ANALOG_ID_TOLERANCE 7
@@ -25,7 +27,7 @@ const int analogIdVals[ID_TABLE_SIZE] = {   0,  45,  90, 129, 182, 214, 245, 272
                                           
 struct valveSlotType{
   byte box;
-  byte slot;  
+  int slot;  
 };
 
 unsigned long drainStart=0;
@@ -69,9 +71,9 @@ void update_valves(){
 
   if(drainStart>0){
     unsigned long timeDiff = millis() - drainStart;
-    digitalWrite(DRAIN_VALVE_A, timeDiff < DRAIN_MILLISECONDS);
-    digitalWrite(DRAIN_VALVE_B, (timeDiff > DRAIN_MILLISECONDS) & (timeDiff < 2*DRAIN_MILLISECONDS));
-    if(timeDiff > 2*DRAIN_MILLISECONDS) drainStart=0;
+    digitalWrite(DRAIN_VALVE_A, timeDiff < drainSeconds*1000);
+    digitalWrite(DRAIN_VALVE_B, (timeDiff > drainSeconds*1000) & (timeDiff < 2*drainSeconds*1000));
+    if(timeDiff > 2*drainSeconds*1000) drainStart=0;
   }else{
     digitalWrite(DRAIN_VALVE_A, LOW);
     digitalWrite(DRAIN_VALVE_B, LOW);
@@ -110,6 +112,13 @@ void cmd_valve(int arg_cnt, char **args){
 
   if(arg_cnt >2)
     secondaryValve = parse_valveSlot(args[2]);
+
+  //...change time to drain the valves and store change to EEPROM ...........
+  if(primaryValve.box==255){
+    drainSeconds = primaryValve.slot;
+    EEPROM.put(DRAIN_SECONDS_ADDRESS, drainSeconds);    
+  }
+  //..........................
 }
 //--------------------------------------------
 void cmd_identify(int arg_cnt, char **args){
@@ -160,7 +169,11 @@ void setup()
   digitalWrite(DRAIN_VALVE_A, LOW);
   digitalWrite(DRAIN_VALVE_B, LOW);
   
-
+  //unsigned int x=5;
+  //EEPROM.put(DRAIN_SECONDS_ADDRESS, x);
+  EEPROM.get(DRAIN_SECONDS_ADDRESS, drainSeconds);
+  //Serial.println(drainSeconds);
+  
   cmd_identify(0,NULL);
  
   update_valves();
