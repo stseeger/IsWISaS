@@ -7,7 +7,6 @@ import const
 
 import Sequencer
 import GUI_ValveControl
-import GUI_FlowControl
 import GUI_Picarro
 
 import os
