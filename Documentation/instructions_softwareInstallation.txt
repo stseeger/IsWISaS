@@ -6,14 +6,41 @@ https://sparks.gogo.co.nz/assets/_site_/downloads/CH34x_Install_Windows_v3_4.zip
 or here (a link to my personal Dropbox, might not work for all eternity):
 https://www.dropbox.com/s/80woki2fxfcg81h/CH34x_Install_Windows_v3_4.EXE
 
-Step 1.5:
-Install Arduino IDE (optional but recommended):
-https://www.arduino.cc/en/software
+-------------------------
+Step 1.5 (optional but recommended):
 
+In case you just want to run the GUI, you can skip this step, but is recommended if you want to test the functionallity of the hardware independently from the GUI.
+
+Install Arduino IDE :
+https://www.arduino.cc/en/software
+Via the Serial Monitor of the Arduino IDE you can directly send commands to the Arduino Nano on the IsWISaS main controller board.
+Connect main controller Arduino to Computer, chose the correct COM-Port and select a Baud-rate of 9600.
+The main controller recognizes three commands "?", "valve" and "flow":
+
+? 
+identify: The controller should return its name and version
+
+valve
+If called without arguments, the controller should return the currently opened valves.
+
+valve <box>#<valve> [<secondaryBox>#<valve>]
+open one or two specific valves at once.
+<box> 0 is the main controller, higher numbers (1-15) refer to extensions whose IDs are determined by the red dip switches on the extension boards
+<valve> refers to a valve on the respective box
+[<secondaryBox>#<valve>] (without the square brackets) is optional and can be used to open a secondary valve. In a simple setup, this option is not used.
+
+flow
+If called without arguments, the controller should return the current flow rates (possible range mapped to values between 0 and 255) of the two flow controllers
+
+flow <flowRateA> <flowRateB>
+If two numbers (possible ranges mapped between 0 and 255) are passed, they will be used to set the flow rate targets of the two flow controllers.
+
+-------------------------
 Step 2:
 Install Python 3:
 https://www.python.org/downloads/
 
+-------------------------
 Step 3:
 Install the pySerial module :
 press: windows-key + R
@@ -21,12 +48,14 @@ enter: cmd
 enter: <python> -m pip install pyserial
 (<python> should contain the path to the python3 installation, default on the picarro might be the path to python2)
 
+-------------------------
 Step 4:
 Extract the IsWISaS/Software directory to your Picarro's Desktop
 Remove "Desktop>\IsWISaS\Software\temp\serial.cch"
 ("serial.cch" is meant to remember the Com-Port to which the Arduino is connected. This will be constant once your setup is ready, but It is impossible to tell in advance what the Com-Port will be.
  Without "serial.cch" all available Com-Ports are scanned automatically and the right one will be identified and saved into a new serial.cch and loaded without scanning all available Ports upon subsequent starts of the IsWISaS-GUI)
 
+-------------------------
 Step 5:
 create a link to the IsWISaS_GUI:
   right click on your desktop -> New -> shortcut
@@ -37,7 +66,8 @@ Step 6:
 Now you can adapt the Desktop/IsWISaS/Software/config/valve.cfg to match your setup.
 
 Step 7:
-Eventually, you can start the IsWISaS-GUI by clicking on the shortcut you created in step 5.
+Connect the Arduino Nano of the IsWISaS main controller board to your Computer (using a Mini-USB cable).
+Start IsWISaS-GUI by clicking on the shortcut that was created in step 5.
 
 
 
