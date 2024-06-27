@@ -13,6 +13,63 @@ import ExtraWidgets
 MAX_VALVES_PER_COLUMN = const.MAX_VALVES_PER_COLUMN
 colors = configLoader.load_confDict("../config/default/colors.cfg",
                                     verbose = __name__=="__main__")
+
+
+class SecondaryValveControlFrame(tk.Frame):
+    def __init__(self, master, primaryValveControlFrame, *args, **kwargs):
+        super(SecondaryValveControlFrame,self).__init__(master, *args, **kwargs)
+
+        self.primary = primaryValveControlFrame
+
+        self.probeButtonFrame = tk.Frame(self)
+        self.probeButtonFrame.grid(row=0, column=0, sticky="new")
+
+        probeDict = self.primary.sequ.probeDict
+        self.probeButtonDict = {}
+
+        N = len(probeDict.keys())
+        columnCount = math.ceil(N/MAX_VALVES_PER_COLUMN)
+        rowCount = math.ceil(N/columnCount)
+
+        self.activeIndex=None
+        
+        
+        for i, ID in enumerate(probeDict.keys()):
+            buttonState = tk.ACTIVE if not probeDict[ID].isActive() else tk.DISABLED
+            button = tk.Button(self.probeButtonFrame, command = lambda j = i: self.valveButton_click(j),
+                               font = tkFont.Font(family="Sans", size=9, weight="bold"),
+                               text = ID, disabledforeground="#866",state = buttonState)            
+
+            self.probeButtonDict[self.probeButtonFrame.nametowidget(button)] = {"ID":ID, "button":button}            
+            
+            row = math.floor(i/columnCount)
+            column = i-math.floor(row*columnCount)
+            button.grid(row = row, column=column, sticky="nsew")
+            self.probeButtonFrame.rowconfigure(row, weight=1)
+            self.probeButtonFrame.columnconfigure(column, weight=1)
+
+    def valveButton_click(self, i):
+        if self.activeIndex is None:
+            self.activeIndex = i
+        else:
+            if self.activeIndex == i:
+                self.activeIndex = None
+                self.primary.sequ.secondaryProbe = None
+            else:
+                self.activeIndex=i
+
+        for i, key in enumerate(self.probeButtonDict.keys()):
+            color = self.cget("bg")            
+            if i==self.activeIndex:
+                color="#6f6"
+                self.primary.sequ.secondaryProbe = self.primary.sequ.probeDict[self.probeButtonDict[key]["ID"]]
+
+            self.probeButtonDict[key]["button"].configure(bg=color)
+
+        self.primary.sequ.toggle_activeProbeMode(log=False)
+
+        
+
 class ValveControlFrame(tk.Frame):
     def __init__(self, master, probeSequencer, *args, **kwargs):
         super(ValveControlFrame,self).__init__(master, *args, **kwargs)
@@ -233,7 +290,10 @@ class ValveControlFrame(tk.Frame):
         self.fill_probeButtonFrame()
 
     def schedule(self):
-        pass
+        window = tk.Toplevel()
+        window.title('Secondary valve')
+        secondary = SecondaryValveControlFrame(window, self)
+        secondary.pack()
 
     def extraLabel_click(self,event):
         pass
