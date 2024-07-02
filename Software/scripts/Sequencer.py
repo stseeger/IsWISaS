@@ -176,6 +176,7 @@ class ProbeSequencer():
 
         self._enabled = True
         self.activeProbe = None
+        self.secondaryProbe = None
 
         self._alarmed = False
         self._dry = False
@@ -290,20 +291,25 @@ class ProbeSequencer():
     def set_valve(self):
         return        
 
-    def toggle_activeProbeMode(self, newMode=None, switchCode = const.SWITCH_TIMEOUT):
+    def toggle_activeProbeMode(self, newMode=None, switchCode = const.SWITCH_TIMEOUT, log=True):
         self.activeProbe.toggle_mode(newMode)
 
         actuallyActiveProbe = self.get_actuallyActiveProbe()
 
-        self.valveBuffer.add([actuallyActiveProbe.ID, {"flush":0, "measure":1, "postFlush":2}[self.activeProbe.mode], switchCode])
-        groupValve = "0#%d"%(actuallyActiveProbe.group)
-        valve = "%d#%d"%(actuallyActiveProbe.box, actuallyActiveProbe.slot)
+        if log:
+            self.valveBuffer.add([actuallyActiveProbe.ID, {"flush":0, "measure":1, "postFlush":2}[self.activeProbe.mode], switchCode])        
+
+        primaryValve = "%d#%d"%(actuallyActiveProbe.box, actuallyActiveProbe.slot)
+        groupValve = " 0#%d"%(actuallyActiveProbe.group)
+        secondaryValve = ""
+        if not self.secondaryProbe is None:
+            secondaryValve = " %d#%d"%(self.secondaryProbe.box, self.secondaryProbe.slot)        
 
         print(self.activeProbe)
         ID = self.activeProbe.ID
         print('\t',self.activeProbe.mode,'@',actuallyActiveProbe.ID)
-
-        self.controller.set_valve(valve+" "+groupValve)        
+        
+        self.controller.set_valve(primaryValve+groupValve+secondaryValve)    
         
 
     def switch_probe(self, newProbeID, switchCode):
@@ -417,7 +423,7 @@ class ProbeSequencer():
     def update(self, skip=False):
 
         if not self.sequence[self.position].isActive():
-            self.switch_sequence(self.get_nextPosition(), switchCode=switchCode)
+            self.switch_sequence(self.get_nextPosition(), switchCode=const.SWITCH_MANUAL)
             return        
 
         if self.isAlarmed():
