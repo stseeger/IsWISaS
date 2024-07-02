@@ -28,7 +28,7 @@ class SecondaryValveControlFrame(tk.Frame):
         self.probeButtonDict = {}
 
         N = len(probeDict.keys())
-        columnCount = math.ceil(N/MAX_VALVES_PER_COLUMN)
+        columnCount = math.ceil(N/5)
         rowCount = math.ceil(N/columnCount)
 
         self.activeIndex=None
