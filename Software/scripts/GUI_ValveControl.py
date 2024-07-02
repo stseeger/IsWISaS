@@ -232,6 +232,7 @@ class ValveControlFrame(tk.Frame):
                                font = tkFont.Font(family="Sans", size=9, weight="bold"),
                                text = ID, disabledforeground="#866",state = buttonState)
             button.bind('<Button-3>', self.rightClickProbe)
+            button.bind('<Control-Button-3>', self.rightClickProbeExtra)
 
             self.probeButtonDict[self.probeButtonFrame.nametowidget(button)] = {"ID":ID, "button":button}            
             
@@ -292,6 +293,7 @@ class ValveControlFrame(tk.Frame):
     def schedule(self):
         window = tk.Toplevel()
         window.title('Secondary valve')
+        window.minsize(250,250)
         secondary = SecondaryValveControlFrame(window, self)
         secondary.pack()
 
@@ -322,6 +324,24 @@ class ValveControlFrame(tk.Frame):
         probe = self.sequ.probeDict[buttonInfo["ID"]]
         probe.toggle_activity()
         buttonInfo["button"]["state"] = tk.ACTIVE if probe.isActive() else tk.DISABLED
+
+    def rightClickProbeExtra(self, event):
+        # retrieve probe ID and button pointer
+        buttonInfo = self.probeButtonDict[event.widget]
+        _probe = self.sequ.probeDict[buttonInfo["ID"]]
+        _box = _probe.box
+        _isActive = _probe.isActive()
+
+        for key in self.probeButtonDict.keys():
+            buttonInfo = self.probeButtonDict[key]
+            probe = self.sequ.probeDict[buttonInfo["ID"]]
+            box = probe.box
+            isActive = probe.isActive()
+
+            if box==_box:
+                probe._enabled = not _isActive
+                buttonInfo["button"]["state"] = tk.ACTIVE if probe.isActive() else tk.DISABLED
+        
 
     def rightClickSequence(self, event):
 
@@ -457,11 +477,11 @@ class ValveControlFrame(tk.Frame):
 if __name__ == "__main__":    
    
     import SerialDevices
-    dInfo = SerialDevices.find_device("IsWISaS_Controller", [9600], cachePath = "../temp/serial.cch")   
-    try:
-        d = SerialDevices.IsWISaS_Controller(dInfo["port"], dInfo["baudRate"])
-    except:
-        d = SerialDevices.IsWISaS_Controller("foobar", 0)    
+    #dInfo = SerialDevices.find_device("IsWISaS_Controller", [9600], cachePath = "../temp/serial.cch")   
+    #try:
+    #    d = SerialDevices.IsWISaS_Controller(dInfo["port"], dInfo["baudRate"])
+    #except:
+    d = SerialDevices.IsWISaS_Controller("foobar", 0)    
 
     sequencer = Sequencer.ProbeSequencer(confFile = "../config/valve.cfg", controller = d)
 

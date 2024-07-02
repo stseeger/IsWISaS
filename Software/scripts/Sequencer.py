@@ -292,11 +292,11 @@ class ProbeSequencer():
         return        
 
     def toggle_activeProbeMode(self, newMode=None, switchCode = const.SWITCH_TIMEOUT, log=True):
-        self.activeProbe.toggle_mode(newMode)
-
+        
         actuallyActiveProbe = self.get_actuallyActiveProbe()
 
         if log:
+            self.activeProbe.toggle_mode(newMode)
             self.valveBuffer.add([actuallyActiveProbe.ID, {"flush":0, "measure":1, "postFlush":2}[self.activeProbe.mode], switchCode])        
 
         primaryValve = "%d#%d"%(actuallyActiveProbe.box, actuallyActiveProbe.slot)
